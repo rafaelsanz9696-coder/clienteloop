@@ -608,7 +608,7 @@ export default function InboxPage() {
   const selectedId = conversationId ? Number(conversationId) : null;
 
   function handleSelect(id: number) {
-    navigate(`/inbox/${id}`);
+    navigate(`/app/inbox/${id}`);
   }
 
   if (loading) return <LoadingSpinner text="Cargando conversaciones..." />;

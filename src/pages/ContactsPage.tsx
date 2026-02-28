@@ -198,7 +198,7 @@ function ContactDetail({ contactId, onClose, onUpdated }: { contactId: number; o
           {/* Actions */}
           <div className="pt-4 border-t border-slate-100">
             <button
-              onClick={() => navigate('/inbox')}
+              onClick={() => navigate('/app/inbox')}
               className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-50 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors"
             >
               <MessageSquare className="w-4 h-4" /> Ver Conversaciones
@@ -342,7 +342,7 @@ export default function ContactsPage() {
                   contacts.map((contact) => (
                     <tr
                       key={contact.id}
-                      onClick={() => navigate(`/contacts/${contact.id}`)}
+                      onClick={() => navigate(`/app/contacts/${contact.id}`)}
                       className="border-b border-slate-50 hover:bg-slate-50 cursor-pointer transition-colors"
                     >
                       <td className="px-4 py-3">
@@ -385,7 +385,7 @@ export default function ContactsPage() {
 
       {/* Modals */}
       {showCreate && <CreateContactModal onClose={() => setShowCreate(false)} onCreated={refetch} />}
-      {contactId && <ContactDetail contactId={Number(contactId)} onClose={() => navigate('/contacts')} onUpdated={refetch} />}
+      {contactId && <ContactDetail contactId={Number(contactId)} onClose={() => navigate('/app/contacts')} onUpdated={refetch} />}
     </div>
   );
 }
