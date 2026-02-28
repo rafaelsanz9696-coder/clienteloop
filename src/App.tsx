@@ -35,7 +35,7 @@ export default function App() {
       <Route index element={user ? <Navigate to="/app" replace /> : <LandingPage />} />
 
       {/* Public auth routes — redirect logged-in users to dashboard */}
-      <Route path="/login"    element={user ? <Navigate to="/app" replace /> : <LoginPage />} />
+      <Route path="/login" element={user ? <Navigate to="/app" replace /> : <LoginPage />} />
       <Route path="/register" element={user ? <Navigate to="/app" replace /> : <RegisterPage />} />
 
       {/* Protected routes — requires auth + at least one business */}
@@ -53,6 +53,18 @@ export default function App() {
           </Route>
         </Route>
       </Route>
+
+      {/* Shorthand redirects — /inbox → /app/inbox etc. */}
+      <Route path="/inbox" element={<Navigate to="/app/inbox" replace />} />
+      <Route path="/inbox/:id" element={<Navigate to="/app/inbox" replace />} />
+      <Route path="/dashboard" element={<Navigate to="/app" replace />} />
+      <Route path="/contacts" element={<Navigate to="/app/contacts" replace />} />
+      <Route path="/pipeline" element={<Navigate to="/app/pipeline" replace />} />
+      <Route path="/tasks" element={<Navigate to="/app/tasks" replace />} />
+      <Route path="/settings" element={<Navigate to="/app/settings" replace />} />
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
