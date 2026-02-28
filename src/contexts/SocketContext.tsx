@@ -31,17 +31,19 @@ export function SocketProvider({ children }: { children: ReactNode }) {
             return;
         }
 
-        // Connect to backend websocket
-        // Assuming backend runs on same host but port 3001 in dev, 
-        // or same origin in production. 
-        // Vite proxy usually doesn't handle wss by default without config, 
-        // so we will point directly or trust the env.
-        const url = import.meta.env.VITE_WEBSOCKET_URL || '/';
+        // Connect to backend websocket.
+        // In production (Vercel), VITE_WEBSOCKET_URL must point to the Render backend.
+        // If it's not set or is just '/', skip connection to prevent crashing the app.
+        const wsUrl = import.meta.env.VITE_WEBSOCKET_URL;
+        if (!wsUrl || wsUrl === '/') {
+            console.warn('[Socket] No VITE_WEBSOCKET_URL configured, skipping WebSocket connection.');
+            return;
+        }
 
-        const newSocket = io(url, {
+        const newSocket = io(wsUrl, {
             transports: ['websocket', 'polling'],
-            reconnectionAttempts: 5,
-            reconnectionDelay: 2000,
+            reconnectionAttempts: 3,
+            reconnectionDelay: 3000,
         });
 
         newSocket.on('connect', () => {
