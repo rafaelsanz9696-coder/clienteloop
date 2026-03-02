@@ -12,6 +12,7 @@ import {
   Trash2,
   Save,
   Download,
+  MoreVertical,
 } from 'lucide-react';
 import { cn, getChannelColor, getChannelLabel, getStageLabel, getStageColor, formatRelativeTime } from '../lib/utils';
 import { api } from '../lib/api';
@@ -19,6 +20,65 @@ import { useApi } from '../hooks/useApi';
 import { useBusiness } from '../contexts/BusinessContext';
 import type { Contact } from '../types/index';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
+
+// Edit Contact Modal
+function EditContactModal({ contact, onClose, onSaved }: { contact: Contact; onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState(contact.name);
+  const [phone, setPhone] = useState(contact.phone || '');
+  const [email, setEmail] = useState(contact.email || '');
+  const [channel, setChannel] = useState<string>(contact.channel || 'whatsapp');
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      await api.updateContact(contact.id, { name, phone, email, channel: channel as any });
+      onSaved();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-5 border-b border-slate-100">
+          <h3 className="font-bold text-slate-800">Editar Contacto</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <div>
+            <label className="text-sm font-medium text-slate-700 mb-1 block">Nombre *</label>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-slate-700 mb-1 block">Teléfono (con código de país, ej: 18095551234)</label>
+            <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="18095551234" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-slate-700 mb-1 block">Email</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-slate-700 mb-1 block">Canal</label>
+            <select value={channel} onChange={(e) => setChannel(e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="whatsapp">WhatsApp</option>
+              <option value="instagram">Instagram</option>
+              <option value="email">Email</option>
+              <option value="web">Web</option>
+            </select>
+          </div>
+          <button type="submit" disabled={saving || !name.trim()} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold disabled:opacity-50 transition-colors">
+            {saving ? 'Guardando...' : 'Guardar Cambios'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 // Create Contact Modal
 function CreateContactModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
@@ -222,6 +282,8 @@ export default function ContactsPage() {
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
 
   const { data: contacts, loading, refetch } = useApi(
     () => api.getContacts({ search: search || undefined, stage: stageFilter || undefined }),
@@ -329,6 +391,7 @@ export default function ContactsPage() {
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Canal</th>
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Etapa</th>
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 hidden md:table-cell">Ultimo Contacto</th>
+                  <th className="px-4 py-3 w-10"></th>
                 </tr>
               </thead>
               <tbody>
@@ -342,7 +405,7 @@ export default function ContactsPage() {
                   contacts.map((contact) => (
                     <tr
                       key={contact.id}
-                      onClick={() => navigate(`/app/contacts/${contact.id}`)}
+                      onClick={() => { if (menuOpenId !== contact.id) navigate(`/app/contacts/${contact.id}`); }}
                       className="border-b border-slate-50 hover:bg-slate-50 cursor-pointer transition-colors"
                     >
                       <td className="px-4 py-3">
@@ -374,6 +437,46 @@ export default function ContactsPage() {
                           {formatRelativeTime(contact.last_contact_at)}
                         </span>
                       </td>
+                      {/* Three-dot menu */}
+                      <td className="px-2 py-3 w-10" onClick={(e) => e.stopPropagation()}>
+                        <div className="relative">
+                          <button
+                            onClick={() => setMenuOpenId(menuOpenId === contact.id ? null : contact.id)}
+                            className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                          {menuOpenId === contact.id && (
+                            <div className="absolute right-0 top-8 z-30 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[160px]">
+                              <button
+                                onClick={() => { setEditingContact(contact); setMenuOpenId(null); }}
+                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                              >
+                                <Edit2 className="w-4 h-4 text-blue-500" /> Editar contacto
+                              </button>
+                              <button
+                                onClick={() => { navigate(`/app/inbox`); setMenuOpenId(null); }}
+                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                              >
+                                <MessageSquare className="w-4 h-4 text-green-500" /> Ver conversaciones
+                              </button>
+                              <div className="border-t border-slate-100 my-1" />
+                              <button
+                                onClick={async () => {
+                                  if (confirm(`¿Eliminar a ${contact.name}?`)) {
+                                    await api.deleteContact(contact.id);
+                                    refetch();
+                                  }
+                                  setMenuOpenId(null);
+                                }}
+                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" /> Eliminar
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -385,7 +488,12 @@ export default function ContactsPage() {
 
       {/* Modals */}
       {showCreate && <CreateContactModal onClose={() => setShowCreate(false)} onCreated={refetch} />}
+      {editingContact && <EditContactModal contact={editingContact} onClose={() => setEditingContact(null)} onSaved={refetch} />}
       {contactId && <ContactDetail contactId={Number(contactId)} onClose={() => navigate('/app/contacts')} onUpdated={refetch} />}
+      {/* Close menu on outside click */}
+      {menuOpenId !== null && (
+        <div className="fixed inset-0 z-20" onClick={() => setMenuOpenId(null)} />
+      )}
     </div>
   );
 }
