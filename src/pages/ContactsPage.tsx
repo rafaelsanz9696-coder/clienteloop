@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Search,
@@ -283,7 +283,14 @@ export default function ContactsPage() {
   const [stageFilter, setStageFilter] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
-  const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
+  const [menuOpen, setMenuOpen] = useState<{ id: number; x: number; y: number } | null>(null);
+
+  // Close menu on scroll
+  useEffect(() => {
+    const close = () => setMenuOpen(null);
+    window.addEventListener('scroll', close, true);
+    return () => window.removeEventListener('scroll', close, true);
+  }, []);
 
   const { data: contacts, loading, refetch } = useApi(
     () => api.getContacts({ search: search || undefined, stage: stageFilter || undefined }),
@@ -405,7 +412,7 @@ export default function ContactsPage() {
                   contacts.map((contact) => (
                     <tr
                       key={contact.id}
-                      onClick={() => { if (menuOpenId !== contact.id) navigate(`/app/contacts/${contact.id}`); }}
+                      onClick={() => { if (menuOpen?.id !== contact.id) navigate(`/app/contacts/${contact.id}`); }}
                       className="border-b border-slate-50 hover:bg-slate-50 cursor-pointer transition-colors"
                     >
                       <td className="px-4 py-3">
@@ -439,43 +446,20 @@ export default function ContactsPage() {
                       </td>
                       {/* Three-dot menu */}
                       <td className="px-2 py-3 w-10" onClick={(e) => e.stopPropagation()}>
-                        <div className="relative">
-                          <button
-                            onClick={() => setMenuOpenId(menuOpenId === contact.id ? null : contact.id)}
-                            className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors"
-                          >
-                            <MoreVertical className="w-4 h-4" />
-                          </button>
-                          {menuOpenId === contact.id && (
-                            <div className="absolute right-0 top-8 z-30 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[160px]">
-                              <button
-                                onClick={() => { setEditingContact(contact); setMenuOpenId(null); }}
-                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                              >
-                                <Edit2 className="w-4 h-4 text-blue-500" /> Editar contacto
-                              </button>
-                              <button
-                                onClick={() => { navigate(`/app/inbox`); setMenuOpenId(null); }}
-                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                              >
-                                <MessageSquare className="w-4 h-4 text-green-500" /> Ver conversaciones
-                              </button>
-                              <div className="border-t border-slate-100 my-1" />
-                              <button
-                                onClick={async () => {
-                                  if (confirm(`¿Eliminar a ${contact.name}?`)) {
-                                    await api.deleteContact(contact.id);
-                                    refetch();
-                                  }
-                                  setMenuOpenId(null);
-                                }}
-                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                              >
-                                <Trash2 className="w-4 h-4" /> Eliminar
-                              </button>
-                            </div>
-                          )}
-                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                            setMenuOpen(menuOpen?.id === contact.id ? null : {
+                              id: contact.id,
+                              x: rect.right,
+                              y: rect.bottom + 4,
+                            });
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors"
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   ))
@@ -490,10 +474,47 @@ export default function ContactsPage() {
       {showCreate && <CreateContactModal onClose={() => setShowCreate(false)} onCreated={refetch} />}
       {editingContact && <EditContactModal contact={editingContact} onClose={() => setEditingContact(null)} onSaved={refetch} />}
       {contactId && <ContactDetail contactId={Number(contactId)} onClose={() => navigate('/app/contacts')} onUpdated={refetch} />}
-      {/* Close menu on outside click */}
-      {menuOpenId !== null && (
-        <div className="fixed inset-0 z-20" onClick={() => setMenuOpenId(null)} />
-      )}
+
+      {/* Fixed-position context menu — renders outside overflow-hidden table */}
+      {menuOpen && (() => {
+        const contact = contacts?.find(c => c.id === menuOpen.id);
+        if (!contact) return null;
+        return (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(null)} />
+            <div
+              className="fixed z-50 bg-white border border-slate-200 rounded-xl shadow-xl py-1 min-w-[180px]"
+              style={{ top: menuOpen.y, right: window.innerWidth - menuOpen.x }}
+            >
+              <button
+                onClick={() => { setEditingContact(contact); setMenuOpen(null); }}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                <Edit2 className="w-4 h-4 text-blue-500" /> Editar contacto
+              </button>
+              <button
+                onClick={() => { navigate('/app/inbox'); setMenuOpen(null); }}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                <MessageSquare className="w-4 h-4 text-green-500" /> Ver conversaciones
+              </button>
+              <div className="border-t border-slate-100 my-1" />
+              <button
+                onClick={async () => {
+                  if (confirm(`¿Eliminar a ${contact.name}?`)) {
+                    await api.deleteContact(contact.id);
+                    refetch();
+                  }
+                  setMenuOpen(null);
+                }}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" /> Eliminar
+              </button>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }
