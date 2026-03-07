@@ -21,10 +21,40 @@ import { useBusiness } from '../contexts/BusinessContext';
 import type { Contact } from '../types/index';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 
+// Country codes for WhatsApp
+const COUNTRY_CODES = [
+  { label: '🇩🇴 +1 (RD)', code: '1' },
+  { label: '🇲🇽 +52 (MX)', code: '52' },
+  { label: '🇨🇴 +57 (CO)', code: '57' },
+  { label: '🇻🇪 +58 (VE)', code: '58' },
+  { label: '🇦🇷 +54 (AR)', code: '54' },
+  { label: '🇵🇷 +1 (PR)', code: '1787' },
+  { label: '🇺🇸 +1 (USA)', code: '1' },
+  { label: '🇪🇸 +34 (ES)', code: '34' },
+  { label: '🇨🇱 +56 (CL)', code: '56' },
+  { label: '🇵🇪 +51 (PE)', code: '51' },
+  { label: '🇪🇨 +593 (EC)', code: '593' },
+  { label: '🇬🇹 +502 (GT)', code: '502' },
+  { label: '🇵🇦 +507 (PA)', code: '507' },
+];
+
+function parsePhone(full: string) {
+  // Try to detect country code prefix from full number
+  const digits = full.replace(/\D/g, '');
+  for (const cc of COUNTRY_CODES) {
+    if (digits.startsWith(cc.code)) {
+      return { countryCode: cc.code, local: digits.slice(cc.code.length) };
+    }
+  }
+  return { countryCode: '1', local: digits };
+}
+
 // Edit Contact Modal
 function EditContactModal({ contact, onClose, onSaved }: { contact: Contact; onClose: () => void; onSaved: () => void }) {
   const [name, setName] = useState(contact.name);
-  const [phone, setPhone] = useState(contact.phone || '');
+  const parsed = parsePhone(contact.phone || '');
+  const [countryCode, setCountryCode] = useState(parsed.countryCode);
+  const [localPhone, setLocalPhone] = useState(parsed.local);
   const [email, setEmail] = useState(contact.email || '');
   const [channel, setChannel] = useState<string>(contact.channel || 'whatsapp');
   const [saving, setSaving] = useState(false);
@@ -33,8 +63,9 @@ function EditContactModal({ contact, onClose, onSaved }: { contact: Contact; onC
     e.preventDefault();
     if (!name.trim()) return;
     setSaving(true);
+    const fullPhone = localPhone.trim() ? `${countryCode}${localPhone.replace(/\D/g, '')}` : '';
     try {
-      await api.updateContact(contact.id, { name, phone, email, channel: channel as any });
+      await api.updateContact(contact.id, { name, phone: fullPhone, email, channel: channel as any });
       onSaved();
       onClose();
     } finally {
@@ -55,8 +86,26 @@ function EditContactModal({ contact, onClose, onSaved }: { contact: Contact; onC
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
-            <label className="text-sm font-medium text-slate-700 mb-1 block">Teléfono (con código de país, ej: 18095551234)</label>
-            <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="18095551234" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <label className="text-sm font-medium text-slate-700 mb-1 block">Teléfono WhatsApp</label>
+            <div className="flex gap-2">
+              <select
+                value={countryCode}
+                onChange={(e) => setCountryCode(e.target.value)}
+                className="px-2 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 shrink-0"
+              >
+                {COUNTRY_CODES.map(cc => (
+                  <option key={cc.label} value={cc.code}>{cc.label}</option>
+                ))}
+              </select>
+              <input
+                type="tel"
+                value={localPhone}
+                onChange={(e) => setLocalPhone(e.target.value)}
+                placeholder="8095551234"
+                className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            {localPhone && <p className="text-xs text-slate-400 mt-1">Se guardará como: {countryCode}{localPhone.replace(/\D/g, '')}</p>}
           </div>
           <div>
             <label className="text-sm font-medium text-slate-700 mb-1 block">Email</label>
@@ -83,7 +132,8 @@ function EditContactModal({ contact, onClose, onSaved }: { contact: Contact; onC
 // Create Contact Modal
 function CreateContactModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [countryCode, setCountryCode] = useState('1');
+  const [localPhone, setLocalPhone] = useState('');
   const [email, setEmail] = useState('');
   const [channel, setChannel] = useState('whatsapp');
   const [saving, setSaving] = useState(false);
@@ -92,8 +142,9 @@ function CreateContactModal({ onClose, onCreated }: { onClose: () => void; onCre
     e.preventDefault();
     if (!name.trim()) return;
     setSaving(true);
+    const fullPhone = localPhone.trim() ? `${countryCode}${localPhone.replace(/\D/g, '')}` : '';
     try {
-      await api.createContact({ name, phone, email, channel: channel as any });
+      await api.createContact({ name, phone: fullPhone, email, channel: channel as any });
       onCreated();
       onClose();
     } finally {
@@ -114,8 +165,26 @@ function CreateContactModal({ onClose, onCreated }: { onClose: () => void; onCre
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
-            <label className="text-sm font-medium text-slate-700 mb-1 block">Telefono</label>
-            <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <label className="text-sm font-medium text-slate-700 mb-1 block">Teléfono WhatsApp</label>
+            <div className="flex gap-2">
+              <select
+                value={countryCode}
+                onChange={(e) => setCountryCode(e.target.value)}
+                className="px-2 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 shrink-0"
+              >
+                {COUNTRY_CODES.map(cc => (
+                  <option key={cc.label} value={cc.code}>{cc.label}</option>
+                ))}
+              </select>
+              <input
+                type="tel"
+                value={localPhone}
+                onChange={(e) => setLocalPhone(e.target.value)}
+                placeholder="8095551234"
+                className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            {localPhone && <p className="text-xs text-slate-400 mt-1">Se guardará como: {countryCode}{localPhone.replace(/\D/g, '')}</p>}
           </div>
           <div>
             <label className="text-sm font-medium text-slate-700 mb-1 block">Email</label>
