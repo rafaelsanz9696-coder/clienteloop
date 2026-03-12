@@ -41,7 +41,21 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     `, [bid]);
     const pendingTasks = parseInt(pendingTasksRow[0].count, 10);
 
-    const growthPercent = 15; // TODO: calculate from historical data
+    // Real growth: contacts this month vs last month
+    const { rows: growthRows } = await db.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE created_at >= date_trunc('month', CURRENT_DATE)) AS this_month,
+        COUNT(*) FILTER (
+          WHERE created_at >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month')
+            AND created_at < date_trunc('month', CURRENT_DATE)
+        ) AS last_month
+      FROM contacts WHERE business_id = $1
+    `, [bid]);
+    const thisMonth = parseInt(growthRows[0].this_month, 10);
+    const lastMonth = parseInt(growthRows[0].last_month, 10);
+    const growthPercent = lastMonth === 0
+      ? (thisMonth > 0 ? 100 : 0)
+      : Math.round(((thisMonth - lastMonth) / lastMonth) * 100);
 
     // Weekly chart data (last 7 days)
     const { rows: weeklyData } = await db.query(`
@@ -82,6 +96,26 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
       GROUP BY EXTRACT(DOW FROM created_at)
     `, [bid]);
 
+    // Real closed deals per day (replaces the mocked 20% of leads)
+    const { rows: salesData } = await db.query(`
+      SELECT
+        CASE EXTRACT(DOW FROM created_at)
+          WHEN 0 THEN 'Dom'
+          WHEN 1 THEN 'Lun'
+          WHEN 2 THEN 'Mar'
+          WHEN 3 THEN 'Mie'
+          WHEN 4 THEN 'Jue'
+          WHEN 5 THEN 'Vie'
+          WHEN 6 THEN 'Sab'
+        END as name,
+        COUNT(*) as ventas
+      FROM pipeline_deals
+      WHERE business_id = $1
+        AND stage = 'closed'
+        AND created_at >= CURRENT_DATE - INTERVAL '7 days'
+      GROUP BY EXTRACT(DOW FROM created_at)
+    `, [bid]);
+
     // Merge into chart data
     const days = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
 
@@ -94,17 +128,15 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     }
 
     const chartData = displayDays.map((day) => {
-      const leadEntry = weeklyData.find((d: any) => d.name === day);
-      const citaEntry = appointmentsData.find((d: any) => d.name === day);
-
-      const leadsCount = leadEntry ? parseInt(leadEntry.leads) : 0;
-      const citasCount = citaEntry ? parseInt(citaEntry.citas) : 0;
+      const leadEntry  = weeklyData.find((d: any) => d.name === day);
+      const citaEntry  = appointmentsData.find((d: any) => d.name === day);
+      const salesEntry = salesData.find((d: any) => d.name === day);
 
       return {
         name: day,
-        leads: leadsCount,
-        citas: citasCount,
-        ventas: Math.floor(leadsCount * 0.2), // Mock sales as 20% of leads for the visual
+        leads:  leadEntry  ? parseInt(leadEntry.leads,  10) : 0,
+        citas:  citaEntry  ? parseInt(citaEntry.citas,  10) : 0,
+        ventas: salesEntry ? parseInt(salesEntry.ventas, 10) : 0, // Real closed deals
       };
     });
 

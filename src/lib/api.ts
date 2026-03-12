@@ -8,6 +8,7 @@ import type {
   PipelineGrouped,
   QuickReply,
   DashboardStats,
+  BusinessMemory,
 } from '../types/index';
 import { supabase } from './supabase';
 
@@ -165,4 +166,33 @@ export const api = {
     ),
   deleteChannelNumber: (id: number) =>
     request<{ success: boolean }>(`/business/channels/${id}`, { method: 'DELETE' }),
+
+  // AI Copilot
+  copilotChat: (messages: Array<{ role: string; content: string }>) =>
+    request<{ reply: string; toolsUsed: string[]; pendingAction?: any }>('/ai/copilot', {
+      method: 'POST',
+      body: JSON.stringify({ messages }),
+    }),
+
+  // Setup Assistant
+  setupAssistantChat: (messages: Array<{ role: string; content: string }>) =>
+    request<{ reply: string; setupComplete: boolean }>('/ai/setup-assistant/chat', {
+      method: 'POST',
+      body: JSON.stringify({ messages }),
+    }),
+  setupAssistantFinalize: (messages: Array<{ role: string; content: string }>) =>
+    request<{ memoriesCreated: number; quickRepliesCreated: number; contextUpdated: boolean }>(
+      '/ai/setup-assistant/finalize',
+      { method: 'POST', body: JSON.stringify({ messages }) },
+    ),
+
+  // Agentic Memories
+  getMemories: () =>
+    request<BusinessMemory[]>('/memories'),
+  createMemory: (data: { type: string; content: string; relevance?: number }) =>
+    request<BusinessMemory>('/memories', { method: 'POST', body: JSON.stringify(data) }),
+  updateMemory: (id: number, data: { content?: string; relevance?: number }) =>
+    request<BusinessMemory>(`/memories/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteMemory: (id: number) =>
+    request<{ success: boolean }>(`/memories/${id}`, { method: 'DELETE' }),
 };

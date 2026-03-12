@@ -70,6 +70,8 @@ export async function respondWithNichoAI(params: {
   conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>;
   newMessage: string;
   tone?: 'corto' | 'formal' | 'persuasivo';
+  memories?: string; // Injected by AgentMemory for agentic-plan businesses
+  clientUsesEmojis?: boolean; // Adapt emoji usage to client style
 }): Promise<NichoAIResponse> {
   const config = NICHO_CONFIGS[params.nicho];
   const promptTemplate = NICHO_PROMPTS[params.nicho];
@@ -100,6 +102,18 @@ export async function respondWithNichoAI(params: {
       persuasivo: 'Responde con un tono enfocado en cerrar la venta o cita, resaltando beneficios.',
     };
     systemPrompt += `\n\nINSTRUCCIÓN DE TONO: ${toneInstructions[params.tone]}`;
+  }
+
+  // Adapt emoji usage to client's style
+  if (params.clientUsesEmojis !== undefined) {
+    systemPrompt += params.clientUsesEmojis
+      ? '\n\nEMOJIS: El cliente usa emojis en sus mensajes. Puedes incluir 1-2 emojis si es natural para el contexto.'
+      : '\n\nEMOJIS: El cliente NO usa emojis. No incluyas ningún emoji en tu respuesta.';
+  }
+
+  // Inject per-business learned memories (agentic plan only)
+  if (params.memories) {
+    systemPrompt += params.memories;
   }
 
   systemPrompt += `\n\n${GLOBAL_GUARDRAILS}`;

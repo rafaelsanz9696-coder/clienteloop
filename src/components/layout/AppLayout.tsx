@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
+import CopilotPanel from '../CopilotPanel';
 
 const pageTitles: Record<string, string> = {
   '/': 'Dashboard',
@@ -28,6 +29,7 @@ export default function AppLayout() {
           <Outlet />
         </main>
       </div>
+      <CopilotPanel />
     </div>
   );
 }

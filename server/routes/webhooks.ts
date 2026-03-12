@@ -3,6 +3,7 @@ import db from '../db/database.js';
 import { AutomationService } from '../lib/automation.js';
 import { getIo } from '../lib/socket.js';
 import crypto from 'crypto';
+import fs from 'fs';
 
 const router = Router();
 
@@ -161,13 +162,16 @@ router.get('/meta/whatsapp', (req, res) => {
 // ─── Meta WhatsApp Cloud API — Receiving Messages ───────────────────────────
 
 router.post('/meta/whatsapp', async (req, res) => {
-  // Always return 200 immediately to Meta so they don't retry
-  res.sendStatus(200);
-
   try {
     const body = req.body;
+    console.log('[Meta Webhook POST] Payload arriving:', JSON.stringify(body, null, 2));
 
-    if (body.object !== 'whatsapp_business_account') return;
+    if (body.object !== 'whatsapp_business_account') {
+      return res.sendStatus(200);
+    }
+
+    // Always return 200 immediately to Meta so they don't retry
+    res.sendStatus(200);
 
     for (const entry of body.entry) {
       for (const change of entry.changes) {
@@ -199,6 +203,7 @@ router.post('/meta/whatsapp', async (req, res) => {
     }
   } catch (err) {
     console.error('[Meta Webhook Error]', err);
+    if (!res.headersSent) res.sendStatus(500);
   }
 });
 

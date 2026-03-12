@@ -101,3 +101,17 @@ export interface PipelineGrouped {
   in_progress: PipelineDeal[];
   closed: PipelineDeal[];
 }
+
+export type MemoryType = 'style' | 'faq' | 'pattern' | 'client_insight';
+
+export interface BusinessMemory {
+  id: number;
+  business_id: number;
+  type: MemoryType;
+  content: string;
+  source: 'auto_learned' | 'manual';
+  relevance: number;
+  created_at: string;
+  updated_at: string;
+}
+

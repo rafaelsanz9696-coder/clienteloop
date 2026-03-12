@@ -149,6 +149,23 @@ export async function initDb() {
 
       -- Message delivery status tracking
       ALTER TABLE messages ADD COLUMN IF NOT EXISTS delivery_status TEXT DEFAULT 'sent';
+
+      -- Agentic plan: per-business plan tier
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'starter';
+
+      -- Agentic memory: per-business AI memories that persist across conversations
+      CREATE TABLE IF NOT EXISTS business_memories (
+        id          SERIAL PRIMARY KEY,
+        business_id INTEGER NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+        type        TEXT NOT NULL, -- 'style' | 'faq' | 'pattern' | 'client_insight'
+        content     TEXT NOT NULL,
+        source      TEXT DEFAULT 'manual', -- 'auto_learned' | 'manual'
+        relevance   INTEGER DEFAULT 5,     -- 1-10, higher = more important
+        created_at  TIMESTAMPTZ DEFAULT NOW(),
+        updated_at  TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_business_memories_business_id ON business_memories(business_id);
+      CREATE INDEX IF NOT EXISTS idx_business_memories_type        ON business_memories(type);
     `);
     console.log('[DB] PostgreSQL connected and schema initialized.');
   } catch (err) {

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Users,
   Calendar,
@@ -10,6 +10,7 @@ import {
   MoreHorizontal,
   ChevronRight,
   TrendingUp,
+  Sparkles,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import {
@@ -27,7 +28,10 @@ import { api } from '../lib/api';
 import { useApi } from '../hooks/useApi';
 import { useBusiness } from '../contexts/BusinessContext';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
+import InfoTooltip from '../components/ui/Tooltip';
 import { useNavigate } from 'react-router-dom';
+import AIInsightsPanel from '../components/dashboard/AIInsightsPanel';
+import AISetupAssistant from '../components/AISetupAssistant';
 
 const StatCard = ({
   title,
@@ -36,6 +40,7 @@ const StatCard = ({
   icon: Icon,
   gradient,
   delay = 0,
+  tooltip,
 }: {
   title: string;
   value: string;
@@ -43,6 +48,7 @@ const StatCard = ({
   icon: any;
   gradient: string;
   delay?: number;
+  tooltip?: string;
 }) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
@@ -57,7 +63,10 @@ const StatCard = ({
       <div>
         <div className="flex items-baseline gap-2">
           <span className="text-4xl font-bold tracking-tight">{value}</span>
-          <span className="text-lg font-medium opacity-90">{title}</span>
+          <span className="text-lg font-medium opacity-90 flex items-center gap-1">
+            {title}
+            {tooltip && <InfoTooltip text={tooltip} />}
+          </span>
         </div>
         <p className="text-sm opacity-75 mt-1 font-medium">{subtitle}</p>
       </div>
@@ -136,12 +145,14 @@ const PipelineCard = ({
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { activeBusinessId } = useBusiness();
+  const [showSetupAssistant, setShowSetupAssistant] = useState(false);
   const { data: stats, loading: statsLoading } = useApi(() => api.getStats(), [activeBusinessId]);
   const { data: tasks, loading: tasksLoading, refetch: refetchTasks } = useApi(
     () => api.getTasks({ status: 'pending' }),
     [activeBusinessId]
   );
   const { data: pipeline, loading: pipelineLoading } = useApi(() => api.getPipeline(), [activeBusinessId]);
+  const { data: memories } = useApi(() => api.getMemories(), [activeBusinessId]);
 
   if (statsLoading || tasksLoading || pipelineLoading) {
     return <LoadingSpinner text="Cargando dashboard..." />;
@@ -159,9 +170,10 @@ export default function DashboardPage() {
   }
 
   return (
+    <>
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
           title="Nuevos Leads"
           value={String(stats?.newLeadsToday || 0)}
@@ -169,6 +181,7 @@ export default function DashboardPage() {
           icon={Users}
           gradient="bg-gradient-to-br from-emerald-500 to-emerald-600"
           delay={0.1}
+          tooltip="Personas que contactaron tu negocio por primera vez hoy"
         />
         <StatCard
           title="Citas Agendadas"
@@ -177,20 +190,68 @@ export default function DashboardPage() {
           icon={Calendar}
           gradient="bg-gradient-to-br from-blue-500 to-blue-600"
           delay={0.2}
+          tooltip="Tareas programadas con fecha creadas esta semana (citas, llamadas, seguimientos)"
         />
         <StatCard
           title="Ingresos del Mes"
           value={formatCurrency(stats?.revenueThisMonth || 0)}
-          subtitle={`Crecimiento +${stats?.growthPercent || 0}%`}
+          subtitle={`Crecimiento ${(stats?.growthPercent || 0) >= 0 ? '+' : ''}${stats?.growthPercent || 0}%`}
           icon={DollarSign}
           gradient="bg-gradient-to-br from-orange-500 to-orange-600"
           delay={0.3}
+          tooltip="Suma de deals cerrados en el mes actual en tu pipeline"
+        />
+        <StatCard
+          title="Conv. Abiertas"
+          value={String(stats?.openConversations || 0)}
+          subtitle="Sin resolver"
+          icon={MessageSquare}
+          gradient="bg-gradient-to-br from-violet-500 to-violet-600"
+          delay={0.4}
+          tooltip="Chats activos que aún no han sido resueltos. Haz clic para ir al Inbox."
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column */}
         <div className="lg:col-span-4 space-y-6">
+          {/* AI Insights Panel */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.35 }}
+          >
+            <AIInsightsPanel />
+          </motion.div>
+
+          {/* AI Setup Banner — shown when no memories configured yet */}
+          {memories !== undefined && memories.length === 0 && (
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.38 }}
+              className="bg-gradient-to-br from-purple-600 to-blue-600 rounded-2xl p-5 text-white shadow-lg"
+            >
+              <div className="flex items-start gap-3 mb-3">
+                <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm">Configura tu IA en 2 min</h3>
+                  <p className="text-white/70 text-xs mt-0.5">
+                    Cuéntale a tu asistente sobre tu negocio y generamos todo automáticamente.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSetupAssistant(true)}
+                className="w-full py-2.5 bg-white text-purple-600 font-bold text-sm rounded-xl hover:bg-white/90 transition-colors"
+              >
+                ✨ Configurar con IA
+              </button>
+            </motion.div>
+          )}
+
           {/* Tasks */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -466,5 +527,13 @@ export default function DashboardPage() {
         </div>
       </div>
     </div>
+
+    {showSetupAssistant && (
+      <AISetupAssistant
+        onClose={() => setShowSetupAssistant(false)}
+        onDone={() => navigate('/inbox')}
+      />
+    )}
+    </>
   );
 }

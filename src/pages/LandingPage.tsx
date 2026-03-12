@@ -132,7 +132,7 @@ function Hero() {
           </a>
         </div>
         <p className="mt-5 text-xs text-slate-600">
-          Sin tarjeta de credito · Setup en 10 minutos · Cancela cuando quieras
+          Prueba gratis por 14 días · Setup en 10 minutos · Cancela cuando quieras
         </p>
       </div>
     </section>
@@ -236,71 +236,75 @@ function Pricing() {
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-14">
           <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">
-            Simple. Sin sorpresas.
+            Un solo plan. Todo incluido.
           </h2>
           <p className="text-slate-400">
-            Un precio justo para LATAM. No el precio de Silicon Valley.
+            Reemplaza 4 herramientas diferentes y ahorra cientos de dolares al mes.
           </p>
         </div>
-        <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+        <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
           {/* ClienteLoop */}
-          <div className="p-8 bg-gradient-to-b from-blue-950/40 to-slate-900 rounded-2xl border border-blue-500/30 relative">
+          <div className="p-8 bg-gradient-to-b from-blue-950/40 to-slate-900 rounded-2xl border border-blue-500/30 relative shadow-2xl shadow-blue-900/20">
             <div className="absolute -top-3 left-6 px-3 py-1 bg-blue-600 rounded-full text-xs font-semibold text-white">
-              Recomendado
+              Prueba 14 días gratis
             </div>
             <h3 className="text-white font-bold text-xl mb-2">ClienteLoop Pro</h3>
             <div className="flex items-baseline gap-1 mb-4">
-              <span className="text-4xl font-bold text-white">$19</span>
-              <span className="text-slate-400 text-sm">USD/mes</span>
+              <span className="text-5xl font-black text-white">$100</span>
+              <span className="text-slate-400 text-sm font-medium">USD/mes</span>
             </div>
-            <ul className="space-y-3 mb-8">
+            <p className="text-sm text-blue-300 font-medium mb-6 backdrop-blur-sm bg-blue-500/10 px-3 py-2 rounded-lg border border-blue-500/20">
+              Ideal para negocios que venden por WhatsApp
+            </p>
+            <ul className="space-y-4 mb-8">
               {[
                 'Inbox unificado (WA + IG + Email)',
-                'CRM con pipeline de ventas',
-                'IA especializada por nicho',
-                'Respuestas rapidas ilimitadas',
-                'Hasta 3 agentes',
-                'Soporte en espanol',
+                'CRM completo con pipeline visual',
+                'Agente de IA especializado en tu nicho',
+                'Memoria Agéntica (aprende de tu negocio)',
+                'Insights y sugerencias proactivas',
+                'Hasta 3 agentes humanos',
+                'Soporte directo en español',
               ].map((item) => (
-                <li key={item} className="flex items-start gap-2 text-sm text-slate-300">
-                  <Check className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
-                  {item}
+                <li key={item} className="flex items-start gap-3 text-sm text-slate-300">
+                  <Check className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
+                  <span className="leading-snug">{item}</span>
                 </li>
               ))}
             </ul>
             <Link
               to="/login?tab=signup"
-              className="block w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-sm text-center transition-colors"
+              className="block flex items-center justify-center gap-2 w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-sm text-center transition-all shadow-lg shadow-blue-900/40"
             >
-              Empieza gratis
+              Comenzar prueba gratis <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
 
           {/* Competencia */}
-          <div className="p-8 bg-slate-900/60 rounded-2xl border border-slate-800">
-            <h3 className="text-slate-400 font-bold text-xl mb-2">Competencia tipica</h3>
+          <div className="p-8 bg-slate-900/40 rounded-2xl border border-slate-800 flex flex-col opacity-80">
+            <h3 className="text-slate-400 font-bold text-xl mb-2">Comprarlo por separado</h3>
             <div className="flex items-baseline gap-1 mb-4">
-              <span className="text-4xl font-bold text-slate-500">$79</span>
-              <span className="text-slate-600 text-sm">USD/mes</span>
+              <span className="text-5xl font-black text-slate-600">$250+</span>
+              <span className="text-slate-600 text-sm font-medium">USD/mes</span>
             </div>
-            <ul className="space-y-3 mb-8">
+            <p className="text-sm text-slate-500 font-medium mb-6 px-3 py-2">
+              Fragmentado y difícil de mantener
+            </p>
+            <ul className="space-y-4 mb-8 flex-1">
               {[
-                'Inbox multi-canal',
-                'CRM basico',
-                'IA generica (no por industria)',
-                'Plantillas limitadas',
-                '1 agente incluido',
-                'Soporte en ingles',
-              ].map((item) => (
-                <li key={item} className="flex items-start gap-2 text-sm text-slate-500">
-                  <Check className="w-4 h-4 text-slate-600 mt-0.5 shrink-0" />
-                  {item}
+                'Inbox multicanal (Ej: Manychat $50/m)',
+                'CRM de ventas (Ej: HubSpot $50/m)',
+                'Chatbot Genérico (Ej: Chatnode $100/m)',
+                '❌ No entiende tu industria',
+                '❌ Sin memoria agéntica',
+                '❌ Integraciones complejas (Zapier $50/m)',
+              ].map((item, i) => (
+                <li key={i} className="flex items-start gap-3 text-sm text-slate-500">
+                  <div className="mt-0.5 shrink-0">{item.startsWith('❌') ? '' : <Check className="w-5 h-5 text-slate-600" />}</div>
+                  <span className={item.startsWith('❌') ? 'text-slate-600' : ''}>{item.replace('❌ ', '')}</span>
                 </li>
               ))}
             </ul>
-            <div className="block w-full py-3 bg-slate-800 text-slate-500 font-bold rounded-xl text-sm text-center">
-              4x mas caro
-            </div>
           </div>
         </div>
       </div>

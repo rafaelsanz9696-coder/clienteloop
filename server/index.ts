@@ -16,6 +16,10 @@ import aiRouter from './routes/ai.js';
 import quickRepliesRouter from './routes/quickReplies.js';
 import businessRouter from './routes/business.js';
 import webhooksRouter from './routes/webhooks.js';
+import memoriesRouter from './routes/memories.js';
+import aiInsightsRouter from './routes/aiInsights.js';
+import setupAssistantRouter from './routes/setupAssistant.js';
+import copilotRouter from './routes/copilot.js';
 import { errorLogger } from './middleware/errorLogger.js';
 import { requireAuth } from './middleware/auth.js';
 import { initSocket } from './lib/socket.js';
@@ -71,6 +75,10 @@ app.use('/api/tasks', requireAuth, tasksRouter);
 app.use('/api/stats', requireAuth, statsRouter);
 app.use('/api/ai', requireAuth, aiRouter);
 app.use('/api/quick-replies', requireAuth, quickRepliesRouter);
+app.use('/api/memories', requireAuth, memoriesRouter);
+app.use('/api/ai/insights', requireAuth, aiInsightsRouter);
+app.use('/api/ai/setup-assistant', requireAuth, setupAssistantRouter);
+app.use('/api/ai/copilot', requireAuth, copilotRouter);
 
 // Global error handler
 app.use(errorLogger);

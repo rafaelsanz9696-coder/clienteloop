@@ -7,6 +7,8 @@ import { useBusiness } from '../contexts/BusinessContext';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { parseWhatsAppChat, formatChatForAnalysis, getChatStats } from '../lib/chatParser';
 import QuickRepliesTab from '../components/settings/QuickRepliesTab';
+import MemoriesTab from '../components/settings/MemoriesTab';
+import AISetupAssistant from '../components/AISetupAssistant';
 
 const NICHOS = [
   { value: 'salon', label: 'Salón de Belleza / Estética' },
@@ -22,7 +24,7 @@ const NICHOS = [
 
 // ─── Channel config icons ────────────────────────────────────────────────────
 const CHANNEL_OPTS = [
-  { value: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, placeholder: '+521234567890' },
+  { value: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, placeholder: 'Ej: 1000177549846403' },
   { value: 'sms', label: 'SMS', icon: Phone, placeholder: '+521234567890' },
   { value: 'email', label: 'Email', icon: Mail, placeholder: 'soporte@minegocio.com' },
 ] as const;
@@ -127,6 +129,12 @@ function ChannelsTab() {
               className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          {newChannel === 'whatsapp' && (
+            <p className="text-[11px] text-amber-600 col-span-3 -mt-1">
+              ⚠ Ingresa el <strong>Phone Number ID</strong> de Meta, no el número de teléfono.
+              Lo encuentras en Meta Developer Console → WhatsApp → API Setup.
+            </p>
+          )}
           <div className="flex gap-2 justify-end">
             <button onClick={() => setAdding(false)} className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 transition-colors">
               Cancelar
@@ -158,7 +166,7 @@ export default function SettingsPage() {
   const { activeBusinessId } = useBusiness();
   const { data: business, loading } = useApi(() => api.getBusiness(), [activeBusinessId]);
   const { data: aiLogs } = useApi(() => api.getAiLogs(), [activeBusinessId]);
-  const [activeTab, setActiveTab] = useState<'general' | 'channels' | 'templates'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'channels' | 'templates' | 'memory'>('general');
   const [form, setForm] = useState({
     name: '',
     nicho: 'salon',
@@ -170,6 +178,7 @@ export default function SettingsPage() {
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showSetupAssistant, setShowSetupAssistant] = useState(false);
 
   // Train AI state
   const [chatInput, setChatInput] = useState('');
@@ -287,6 +296,7 @@ export default function SettingsPage() {
   if (loading) return <LoadingSpinner text="Cargando ajustes..." />;
 
   return (
+    <>
     <div className="p-4 md:p-6 max-w-2xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-bold text-slate-800">Ajustes</h2>
@@ -329,12 +339,26 @@ export default function SettingsPage() {
             <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full" />
           )}
         </button>
+        <button
+          onClick={() => setActiveTab('memory')}
+          className={cn(
+            'pb-3 text-sm font-medium transition-colors relative',
+            activeTab === 'memory' ? 'text-blue-600' : 'text-slate-500 hover:text-slate-700'
+          )}
+        >
+          Memoria IA
+          {activeTab === 'memory' && (
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full" />
+          )}
+        </button>
       </div>
 
       {activeTab === 'channels' ? (
         <ChannelsTab />
       ) : activeTab === 'templates' ? (
         <QuickRepliesTab />
+      ) : activeTab === 'memory' ? (
+        <MemoriesTab />
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -404,7 +428,17 @@ export default function SettingsPage() {
           </div>
 
           <div>
-            <label className="text-sm font-medium text-slate-700 mb-1 block">Contexto para la IA</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-sm font-medium text-slate-700">Contexto para la IA</label>
+              <button
+                type="button"
+                onClick={() => setShowSetupAssistant(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-purple-50 text-purple-600 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Configurar con IA
+              </button>
+            </div>
             <p className="text-xs text-slate-400 mb-2">
               Describe tu negocio, servicios, precios, etc. La IA usara esta informacion para responder a tus clientes.
             </p>
@@ -629,5 +663,15 @@ export default function SettingsPage() {
         </div>
       </div>
     </div >
+
+    {showSetupAssistant && (
+      <AISetupAssistant
+        onClose={() => {
+          setShowSetupAssistant(false);
+          window.location.reload();
+        }}
+      />
+    )}
+    </>
   );
 }

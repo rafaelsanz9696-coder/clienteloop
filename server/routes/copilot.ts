@@ -1,0 +1,443 @@
+/**
+ * copilot.ts — AI Copilot Flotante
+ *
+ * Agentic endpoint using Anthropic tool use. Claude can call up to 7 tools
+ * that query/mutate the business's real data. The tool loop runs server-side
+ * in a single HTTP request (max 5 iterations).
+ *
+ * POST /api/ai/copilot
+ *   body:    { messages: [{role, content}] }
+ *   returns: { reply, toolsUsed, pendingAction? }
+ */
+
+import { Router } from 'express';
+import Anthropic from '@anthropic-ai/sdk';
+import db from '../db/database.js';
+
+const router = Router();
+
+function getClient(): Anthropic {
+  if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY not set');
+  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+}
+
+// ─── Tool definitions for Claude ─────────────────────────────────────────────
+
+const COPILOT_TOOLS: Anthropic.Tool[] = [
+  {
+    name: 'get_stats',
+    description: 'Obtiene estadísticas actuales del negocio: total de contactos, conversaciones abiertas, deals por etapa, valor del pipeline, tareas pendientes.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        period: {
+          type: 'string',
+          enum: ['today', 'week', 'month', 'all'],
+          description: 'Periodo de tiempo para las estadísticas. Default: "all".',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_contacts',
+    description: 'Lista los contactos del negocio. Puede filtrar por etapa del pipeline, canal o búsqueda de texto.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        stage: {
+          type: 'string',
+          enum: ['new', 'contacted', 'in_progress', 'closed', 'lost'],
+          description: 'Filtrar por etapa del pipeline.',
+        },
+        channel: {
+          type: 'string',
+          enum: ['whatsapp', 'instagram', 'email'],
+          description: 'Filtrar por canal de comunicación.',
+        },
+        search: {
+          type: 'string',
+          description: 'Buscar por nombre o número de teléfono.',
+        },
+        limit: {
+          type: 'number',
+          description: 'Número máximo de resultados. Default: 10.',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_pending_followups',
+    description: 'Devuelve contactos cuyas conversaciones llevan más de N días sin respuesta del agente. Útil para detectar leads abandonados.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        days: {
+          type: 'number',
+          description: 'Mínimo de días sin respuesta. Default: 3.',
+        },
+        limit: {
+          type: 'number',
+          description: 'Máximo de resultados. Default: 10.',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_pipeline_summary',
+    description: 'Devuelve un resumen del pipeline de ventas: cuántos deals hay en cada etapa y su valor total acumulado.',
+    input_schema: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'search_conversations',
+    description: 'Busca conversaciones y mensajes que contengan un texto específico.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Texto a buscar en los mensajes.',
+        },
+        limit: {
+          type: 'number',
+          description: 'Máximo de resultados. Default: 5.',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'create_task',
+    description: 'Propone la creación de una tarea de seguimiento. IMPORTANTE: Esta herramienta NO crea la tarea directamente — devuelve los datos para que el usuario confirme antes de guardar.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: {
+          type: 'string',
+          description: 'Título de la tarea. Ej: "Llamar a María López para dar seguimiento".',
+        },
+        contact_name: {
+          type: 'string',
+          description: 'Nombre del contacto relacionado (opcional).',
+        },
+        due_time: {
+          type: 'string',
+          description: 'Fecha/hora de vencimiento en formato ISO 8601 (opcional).',
+        },
+      },
+      required: ['title'],
+    },
+  },
+  {
+    name: 'move_contact_stage',
+    description: 'Mueve un contacto a una nueva etapa del pipeline. Busca el contacto por nombre o ID.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        contact_name: {
+          type: 'string',
+          description: 'Nombre del contacto (búsqueda parcial).',
+        },
+        contact_id: {
+          type: 'number',
+          description: 'ID exacto del contacto (si se conoce).',
+        },
+        new_stage: {
+          type: 'string',
+          enum: ['new', 'contacted', 'in_progress', 'closed', 'lost'],
+          description: 'Nueva etapa del pipeline.',
+        },
+      },
+      required: ['new_stage'],
+    },
+  },
+];
+
+// ─── Tool executor ────────────────────────────────────────────────────────────
+
+async function executeTool(
+  toolName: string,
+  toolInput: Record<string, any>,
+  businessId: number,
+): Promise<{ result: any; pendingAction?: any }> {
+  switch (toolName) {
+    case 'get_stats': {
+      const period = toolInput.period || 'all';
+      const dateFilter =
+        period === 'today'
+          ? "AND created_at >= CURRENT_DATE"
+          : period === 'week'
+            ? "AND created_at >= CURRENT_DATE - INTERVAL '7 days'"
+            : period === 'month'
+              ? "AND created_at >= CURRENT_DATE - INTERVAL '30 days'"
+              : '';
+
+      const [contactsRes, convsRes, dealsRes, tasksRes] = await Promise.all([
+        db.query(`SELECT COUNT(*) as total, pipeline_stage FROM contacts WHERE business_id = $1 ${dateFilter} GROUP BY pipeline_stage`, [businessId]),
+        db.query(`SELECT COUNT(*) as total, status FROM conversations WHERE business_id = $1 GROUP BY status`, [businessId]),
+        db.query(`SELECT COUNT(*) as count, stage, SUM(value) as total_value FROM pipeline_deals WHERE business_id = $1 GROUP BY stage`, [businessId]),
+        db.query(`SELECT COUNT(*) as total, status FROM tasks WHERE business_id = $1 GROUP BY status`, [businessId]),
+      ]);
+
+      return {
+        result: {
+          contacts: contactsRes.rows,
+          conversations: convsRes.rows,
+          pipeline_deals: dealsRes.rows,
+          tasks: tasksRes.rows,
+        },
+      };
+    }
+
+    case 'get_contacts': {
+      const { stage, channel, search, limit = 10 } = toolInput;
+      let query = 'SELECT id, name, phone, email, channel, pipeline_stage, last_contact_at FROM contacts WHERE business_id = $1';
+      const params: any[] = [businessId];
+      let paramIdx = 2;
+
+      if (stage) { query += ` AND pipeline_stage = $${paramIdx++}`; params.push(stage); }
+      if (channel) { query += ` AND channel = $${paramIdx++}`; params.push(channel); }
+      if (search) { query += ` AND (name ILIKE $${paramIdx} OR phone ILIKE $${paramIdx})`; params.push(`%${search}%`); paramIdx++; }
+
+      query += ` ORDER BY last_contact_at DESC LIMIT $${paramIdx}`;
+      params.push(Math.min(limit, 20));
+
+      const { rows } = await db.query(query, params);
+      return { result: { contacts: rows, count: rows.length } };
+    }
+
+    case 'get_pending_followups': {
+      const { days = 3, limit = 10 } = toolInput;
+      const { rows } = await db.query(
+        `SELECT ct.id, ct.name, ct.phone, ct.channel, ct.pipeline_stage,
+                cv.last_message_at,
+                EXTRACT(DAY FROM NOW() - cv.last_message_at)::int AS days_without_reply
+         FROM conversations cv
+         JOIN contacts ct ON ct.id = cv.contact_id
+         WHERE cv.business_id = $1
+           AND cv.status = 'open'
+           AND cv.last_message_at < NOW() - ($2 * INTERVAL '1 day')
+         ORDER BY cv.last_message_at ASC
+         LIMIT $3`,
+        [businessId, days, Math.min(limit, 20)],
+      );
+      return { result: { contacts: rows, count: rows.length, filter_days: days } };
+    }
+
+    case 'get_pipeline_summary': {
+      const { rows } = await db.query(
+        `SELECT stage,
+                COUNT(*) as count,
+                COALESCE(SUM(value), 0) as total_value
+         FROM pipeline_deals
+         WHERE business_id = $1
+         GROUP BY stage
+         ORDER BY CASE stage
+           WHEN 'new' THEN 1
+           WHEN 'contacted' THEN 2
+           WHEN 'in_progress' THEN 3
+           WHEN 'closed' THEN 4
+           WHEN 'lost' THEN 5
+           ELSE 6 END`,
+        [businessId],
+      );
+      const totalValue = rows.reduce((sum: number, r: any) => sum + Number(r.total_value), 0);
+      return { result: { stages: rows, total_pipeline_value: totalValue } };
+    }
+
+    case 'search_conversations': {
+      const { query, limit = 5 } = toolInput;
+      const { rows } = await db.query(
+        `SELECT DISTINCT cv.id as conversation_id, ct.name as contact_name,
+                ct.channel, m.content as matching_message, m.created_at
+         FROM messages m
+         JOIN conversations cv ON cv.id = m.conversation_id
+         JOIN contacts ct ON ct.id = cv.contact_id
+         WHERE cv.business_id = $1 AND m.content ILIKE $2
+         ORDER BY m.created_at DESC
+         LIMIT $3`,
+        [businessId, `%${query}%`, Math.min(limit, 10)],
+      );
+      return { result: { conversations: rows, count: rows.length } };
+    }
+
+    case 'create_task': {
+      // Does NOT insert — returns pending action for frontend confirmation
+      const { title, contact_name, due_time } = toolInput;
+      return {
+        result: {
+          status: 'pending_confirmation',
+          message: 'Tarea lista para crear. El usuario debe confirmar antes de guardar.',
+        },
+        pendingAction: {
+          action: 'create_task',
+          data: { title, contact_name, due_time: due_time || null },
+          requiresConfirm: true,
+        },
+      };
+    }
+
+    case 'move_contact_stage': {
+      const { contact_name, contact_id, new_stage } = toolInput;
+      let id = contact_id;
+
+      if (!id && contact_name) {
+        const { rows } = await db.query(
+          'SELECT id, name FROM contacts WHERE business_id = $1 AND name ILIKE $2 LIMIT 1',
+          [businessId, `%${contact_name}%`],
+        );
+        if (rows.length === 0) {
+          return { result: { error: `No se encontró un contacto con el nombre "${contact_name}"` } };
+        }
+        id = rows[0].id;
+      }
+
+      if (!id) return { result: { error: 'Se requiere contact_name o contact_id' } };
+
+      await db.query(
+        'UPDATE contacts SET pipeline_stage = $1 WHERE id = $2 AND business_id = $3',
+        [new_stage, id, businessId],
+      );
+
+      return { result: { success: true, contact_id: id, new_stage } };
+    }
+
+    default:
+      return { result: { error: `Tool "${toolName}" not implemented` } };
+  }
+}
+
+// ─── Main route ───────────────────────────────────────────────────────────────
+
+router.post('/', async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const businessId: number = user?.business_id;
+
+    if (!businessId || businessId === 0) {
+      return res.status(400).json({ error: 'No business configured yet' });
+    }
+
+    const { messages } = req.body as {
+      messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+    };
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'messages array required' });
+    }
+
+    // Load business context for system prompt
+    const { rows: bizRows } = await db.query(
+      'SELECT name, nicho, ai_context FROM businesses WHERE id = $1',
+      [businessId],
+    );
+
+    const biz = bizRows[0] || { name: 'tu negocio', nicho: 'general', ai_context: '' };
+
+    const NICHO_LABELS: Record<string, string> = {
+      salon: 'salón de belleza', barberia: 'barbería', clinica: 'clínica',
+      inmobiliaria: 'inmobiliaria', restaurante: 'restaurante', academia: 'academia',
+      taller: 'taller mecánico', courier: 'courier', agencia_ia: 'agencia de IA',
+    };
+
+    const systemPrompt = `Eres el Copilot de ClienteLoop para "${biz.name}" (${NICHO_LABELS[biz.nicho] || biz.nicho}).
+Eres el asistente ejecutivo del dueño del negocio — no de los clientes.
+Tienes acceso a los datos reales del negocio a través de herramientas.
+
+REGLAS:
+- Usa herramientas para obtener datos reales antes de responder. NUNCA inventes números.
+- Responde en español, de forma directa y concisa (máximo 3 párrafos o 1 lista de 5 items).
+- Para acciones irreversibles importantes, confirma primero con el usuario.
+- Cuando uses get_contacts o get_pending_followups, incluye nombres reales en tu respuesta.
+- Sé el empleado más útil que el dueño haya tenido.
+
+${biz.ai_context ? `Contexto del negocio:\n${biz.ai_context}` : ''}`;
+
+    const anthropic = getClient();
+    let loopMessages: Anthropic.MessageParam[] = messages as Anthropic.MessageParam[];
+    const toolsUsed: string[] = [];
+    let pendingAction: any = null;
+    let finalReply = '';
+
+    // ── Agentic loop (max 5 tool call iterations) ──────────────────────────
+    for (let i = 0; i < 5; i++) {
+      const response = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1024,
+        system: systemPrompt,
+        tools: COPILOT_TOOLS,
+        messages: loopMessages,
+      });
+
+      if (response.stop_reason === 'end_turn') {
+        const textBlock = response.content.find((c) => c.type === 'text');
+        finalReply = textBlock ? (textBlock as any).text : '';
+        break;
+      }
+
+      if (response.stop_reason === 'tool_use') {
+        // Build tool results
+        const toolResultContents: Anthropic.ToolResultBlockParam[] = [];
+
+        for (const block of response.content) {
+          if (block.type !== 'tool_use') continue;
+
+          toolsUsed.push(block.name);
+          console.log(`[Copilot] Tool call: ${block.name}`, block.input);
+
+          try {
+            const { result, pendingAction: pa } = await executeTool(
+              block.name,
+              block.input as Record<string, any>,
+              businessId,
+            );
+
+            if (pa) pendingAction = pa;
+
+            toolResultContents.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content: JSON.stringify(result),
+            });
+          } catch (err: any) {
+            console.error(`[Copilot] Tool error (${block.name}):`, err);
+            toolResultContents.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              is_error: true,
+              content: `Error al ejecutar ${block.name}: ${err.message}`,
+            });
+          }
+        }
+
+        // Append assistant + tool results and loop
+        loopMessages = [
+          ...loopMessages,
+          { role: 'assistant', content: response.content },
+          { role: 'user', content: toolResultContents },
+        ];
+        continue;
+      }
+
+      // Unexpected stop reason — break
+      break;
+    }
+
+    if (!finalReply) {
+      finalReply = 'No pude generar una respuesta. Intenta de nuevo.';
+    }
+
+    res.json({ reply: finalReply, toolsUsed, pendingAction });
+  } catch (err: any) {
+    console.error('[Copilot]', err);
+    res.status(500).json({ error: err.message || 'Error in copilot' });
+  }
+});
+
+export default router;
