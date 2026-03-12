@@ -102,6 +102,52 @@ export interface PipelineGrouped {
   closed: PipelineDeal[];
 }
 
+export interface ContactNote {
+  id: number;
+  business_id: number;
+  contact_id: number;
+  content: string;
+  created_at: string;
+}
+
+export interface ActivityEntry {
+  id: number;
+  business_id: number;
+  contact_id: number | null;
+  type: string;
+  description: string;
+  created_at: string;
+  contact_name?: string;
+}
+
+export interface SearchResults {
+  contacts: Pick<Contact, 'id' | 'name' | 'phone' | 'email' | 'channel' | 'pipeline_stage'>[];
+  conversations: {
+    id: number;
+    last_message: string;
+    last_message_at: string;
+    channel: string;
+    contact_name: string;
+  }[];
+  deals: {
+    id: number;
+    title: string;
+    stage: string;
+    value: number;
+    contact_name: string;
+  }[];
+}
+
+export interface ReportData {
+  totalLeads: number;
+  revenue: number;
+  conversionRate: number;
+  activeDeals: number;
+  funnel: { new: number; in_progress: number; closed: number };
+  topContacts: { id: number; name: string; channel: string; total_value: number; deal_count: number }[];
+  chartData: { day: string; leads: number }[];
+}
+
 export type MemoryType = 'style' | 'faq' | 'pattern' | 'client_insight';
 
 export interface BusinessMemory {

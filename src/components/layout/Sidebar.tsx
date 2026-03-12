@@ -12,6 +12,7 @@ import {
   Plus,
   Building2,
   LogOut,
+  BarChart2,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useBusiness } from '../../contexts/BusinessContext';
@@ -23,6 +24,7 @@ const navItems = [
   { to: '/app/contacts', icon: Users, label: 'Contactos' },
   { to: '/app/pipeline', icon: Kanban, label: 'Pipeline' },
   { to: '/app/tasks', icon: CheckCircle2, label: 'Tareas' },
+  { to: '/app/reports', icon: BarChart2, label: 'Reportes' },
   { to: '/app/settings', icon: Settings, label: 'Ajustes' },
 ];
 

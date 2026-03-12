@@ -1,15 +1,17 @@
 import { Router } from 'express';
 import db from '../db/database.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
+import { logActivity } from '../lib/activity.js';
 
 const router = Router();
 
-// GET /api/contacts?stage=new&search=maria
+// GET /api/contacts?stage=new&search=maria&tag=VIP
 router.get('/', async (req: AuthenticatedRequest, res) => {
   try {
     const bid = req.user!.business_id;
     const stage = req.query.stage as string;
     const search = req.query.search as string;
+    const tag = req.query.tag as string;
 
     let query = 'SELECT * FROM contacts WHERE business_id = $1';
     const params: any[] = [bid];
@@ -19,9 +21,14 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
       query += ` AND pipeline_stage = $${params.length}`;
     }
     if (search) {
-      const searchTerms = [`%${search}%`, `%${search}%`, `%${search}%`];
+      const like = `%${search}%`;
       query += ` AND (name ILIKE $${params.length + 1} OR phone ILIKE $${params.length + 2} OR email ILIKE $${params.length + 3})`;
-      params.push(...searchTerms);
+      params.push(like, like, like);
+    }
+    if (tag) {
+      // Filter contacts whose JSON tags array contains the tag value
+      params.push(JSON.stringify([tag]));
+      query += ` AND (tags::jsonb @> $${params.length}::jsonb)`;
     }
     query += ' ORDER BY last_contact_at DESC';
 
@@ -56,6 +63,8 @@ router.post('/', async (req: AuthenticatedRequest, res) => {
       INSERT INTO contacts (business_id, name, phone, email, channel, pipeline_stage, notes)
       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
     `, [business_id, name, phone || null, email || null, channel, pipeline_stage, notes]);
+
+    logActivity(business_id, rows[0].id, 'contact_created', `Contacto ${name} creado`);
 
     res.status(201).json(rows[0]);
   } catch (err) {

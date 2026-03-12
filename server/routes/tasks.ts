@@ -1,14 +1,16 @@
 import { Router } from 'express';
 import db from '../db/database.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
+import { logActivity } from '../lib/activity.js';
 
 const router = Router();
 
-// GET /api/tasks?status=pending
+// GET /api/tasks?status=pending&contact_id=X
 router.get('/', async (req: AuthenticatedRequest, res) => {
   try {
     const bid = req.user!.business_id;
     const status = req.query.status as string;
+    const contactId = req.query.contact_id as string;
 
     let query = `
       SELECT t.*, c.name as contact_name
@@ -21,6 +23,10 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     if (status) {
       params.push(status);
       query += ` AND t.status = $${params.length}`;
+    }
+    if (contactId) {
+      params.push(contactId);
+      query += ` AND t.contact_id = $${params.length}`;
     }
     query += ' ORDER BY t.created_at DESC';
 
@@ -52,9 +58,16 @@ router.post('/', async (req: AuthenticatedRequest, res) => {
 });
 
 // PATCH /api/tasks/:id/done
-router.patch('/:id/done', async (req, res) => {
+router.patch('/:id/done', async (_req: AuthenticatedRequest, res) => {
   try {
-    await db.query("UPDATE tasks SET status='done' WHERE id=$1", [req.params.id]);
+    const { rows } = await db.query(
+      "UPDATE tasks SET status='done' WHERE id=$1 RETURNING *",
+      [_req.params.id],
+    );
+    const task = rows[0];
+    if (task) {
+      logActivity(task.business_id, task.contact_id, 'task_completed', `Tarea "${task.title}" completada`);
+    }
     res.json({ success: true });
   } catch (err) {
     console.error(err);

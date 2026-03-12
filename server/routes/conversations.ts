@@ -9,6 +9,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
   try {
     const bid = req.user!.business_id;
     const status = req.query.status as string;
+    const contactId = req.query.contact_id as string;
 
     let query = `
       SELECT c.*, ct.name as contact_name, ct.phone as contact_phone, ct.channel as contact_channel
@@ -21,6 +22,10 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     if (status) {
       params.push(status);
       query += ` AND c.status = $${params.length}`;
+    }
+    if (contactId) {
+      params.push(contactId);
+      query += ` AND c.contact_id = $${params.length}`;
     }
     query += ' ORDER BY c.last_message_at DESC';
 

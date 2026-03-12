@@ -9,6 +9,10 @@ import type {
   QuickReply,
   DashboardStats,
   BusinessMemory,
+  ContactNote,
+  ActivityEntry,
+  SearchResults,
+  ReportData,
 } from '../types/index';
 import { supabase } from './supabase';
 
@@ -60,10 +64,11 @@ export const api = {
     request<Business>(`/business/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
 
   // Contacts
-  getContacts: (params?: { stage?: string; search?: string }) => {
+  getContacts: (params?: { stage?: string; search?: string; tag?: string }) => {
     const qs = new URLSearchParams({ business_id: String(_activeBusinessId) });
     if (params?.search) qs.set('search', params.search);
     if (params?.stage) qs.set('stage', params.stage);
+    if (params?.tag) qs.set('tag', params.tag);
     return request<Contact[]>(`/contacts?${qs}`);
   },
   getContact: (id: number) => request<Contact>(`/contacts/${id}`),
@@ -185,6 +190,40 @@ export const api = {
       '/ai/setup-assistant/finalize',
       { method: 'POST', body: JSON.stringify({ messages }) },
     ),
+
+  // Contact Notes
+  getNotes: (contactId: number) =>
+    request<ContactNote[]>(`/notes?contact_id=${contactId}`),
+  createNote: (contactId: number, content: string) =>
+    request<ContactNote>('/notes', { method: 'POST', body: JSON.stringify({ contact_id: contactId, content }) }),
+  deleteNote: (id: number) =>
+    request<{ success: boolean }>(`/notes/${id}`, { method: 'DELETE' }),
+
+  // Global search
+  globalSearch: (q: string) =>
+    request<SearchResults>(`/search?q=${encodeURIComponent(q)}`),
+
+  // Reports
+  getReports: (from?: string, to?: string) => {
+    const qs = new URLSearchParams();
+    if (from) qs.set('from', from);
+    if (to) qs.set('to', to);
+    return request<ReportData>(`/reports?${qs}`);
+  },
+
+  // Activity log
+  getActivity: (contactId?: number) => {
+    const qs = contactId ? `?contact_id=${contactId}` : '';
+    return request<ActivityEntry[]>(`/activity${qs}`);
+  },
+
+  // Contact-scoped data (for contact profile panel)
+  getContactDeals: (contactId: number) =>
+    request<PipelineDeal[]>(`/pipeline?contact_id=${contactId}`),
+  getContactConversations: (contactId: number) =>
+    request<Conversation[]>(`/conversations?contact_id=${contactId}`),
+  getContactTasks: (contactId: number) =>
+    request<Task[]>(`/tasks?contact_id=${contactId}`),
 
   // Agentic Memories
   getMemories: () =>

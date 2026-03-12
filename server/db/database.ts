@@ -166,6 +166,29 @@ export async function initDb() {
       );
       CREATE INDEX IF NOT EXISTS idx_business_memories_business_id ON business_memories(business_id);
       CREATE INDEX IF NOT EXISTS idx_business_memories_type        ON business_memories(type);
+
+      -- Contact notes: multiple timestamped notes per contact
+      CREATE TABLE IF NOT EXISTS contact_notes (
+        id          SERIAL PRIMARY KEY,
+        business_id INTEGER NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+        contact_id  INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+        content     TEXT    NOT NULL,
+        created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_contact_notes_contact_id ON contact_notes(contact_id);
+
+      -- Activity log: key CRM events per business/contact
+      CREATE TABLE IF NOT EXISTS activity_log (
+        id          SERIAL PRIMARY KEY,
+        business_id INTEGER NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+        contact_id  INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
+        type        TEXT    NOT NULL,
+        description TEXT    NOT NULL,
+        metadata    TEXT,
+        created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_activity_log_business_id ON activity_log(business_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_activity_log_contact_id  ON activity_log(contact_id, created_at DESC);
     `);
     console.log('[DB] PostgreSQL connected and schema initialized.');
   } catch (err) {

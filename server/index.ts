@@ -20,6 +20,10 @@ import memoriesRouter from './routes/memories.js';
 import aiInsightsRouter from './routes/aiInsights.js';
 import setupAssistantRouter from './routes/setupAssistant.js';
 import copilotRouter from './routes/copilot.js';
+import notesRouter from './routes/notes.js';
+import searchRouter from './routes/search.js';
+import reportsRouter from './routes/reports.js';
+import activityRouter from './routes/activity.js';
 import { errorLogger } from './middleware/errorLogger.js';
 import { requireAuth } from './middleware/auth.js';
 import { initSocket } from './lib/socket.js';
@@ -79,6 +83,10 @@ app.use('/api/memories', requireAuth, memoriesRouter);
 app.use('/api/ai/insights', requireAuth, aiInsightsRouter);
 app.use('/api/ai/setup-assistant', requireAuth, setupAssistantRouter);
 app.use('/api/ai/copilot', requireAuth, copilotRouter);
+app.use('/api/notes', requireAuth, notesRouter);
+app.use('/api/search', requireAuth, searchRouter);
+app.use('/api/reports', requireAuth, reportsRouter);
+app.use('/api/activity', requireAuth, activityRouter);
 
 // Global error handler
 app.use(errorLogger);
