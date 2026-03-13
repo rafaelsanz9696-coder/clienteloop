@@ -64,6 +64,11 @@ export const api = {
     request<Business>('/business', { method: 'POST', body: JSON.stringify(data) }),
   updateBusiness: (id: number, data: Partial<Business>) =>
     request<Business>(`/business/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  updateBookingSlug: (slug: string) =>
+    request<{ success: boolean; booking_slug: string | null }>('/business/booking-slug', {
+      method: 'PATCH',
+      body: JSON.stringify({ booking_slug: slug }),
+    }),
 
   // Contacts
   getContacts: (params?: { stage?: string; search?: string; tag?: string }) => {

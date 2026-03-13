@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Save, CheckCircle2, History, Upload, Sparkles, X, Plus, Trash2, MessageSquare, Mail, Phone, CalendarDays, Edit2 } from 'lucide-react';
+import { Save, CheckCircle2, History, Upload, Sparkles, X, Plus, Trash2, MessageSquare, Mail, Phone, CalendarDays, Edit2, Link, Copy, ExternalLink } from 'lucide-react';
 import { cn, formatRelativeTime } from '../lib/utils';
 import { api } from '../lib/api';
 import { useApi } from '../hooks/useApi';
@@ -271,12 +271,166 @@ function ServicesTab() {
   );
 }
 
+// ─── Booking Tab ─────────────────────────────────────────────────────────────
+function BookingTab() {
+  const { activeBusinessId, activeBusiness } = useBusiness();
+  const { data: business, refetch } = useApi(() => api.getBusiness(), [activeBusinessId]);
+
+  const [slug, setSlug] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  // Sync slug from loaded business
+  useEffect(() => {
+    if (business) {
+      setSlug(business.booking_slug ?? String(business.id));
+    }
+  }, [business]);
+
+  const bookingUrl = `${window.location.origin}/book/${slug || (business?.id ?? '')}`;
+
+  async function handleSaveSlug() {
+    setSaving(true);
+    setError('');
+    try {
+      await api.updateBookingSlug(slug);
+      await refetch();
+      setEditing(false);
+    } catch (err: any) {
+      setError(err.message ?? 'Error al guardar');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleCopy() {
+    navigator.clipboard.writeText(bookingUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Booking link card */}
+      <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-5">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center shrink-0">
+            <Link className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-800 mb-0.5">Tu link de reserva</h3>
+            <p className="text-xs text-slate-400">Comparte este link con tus clientes para que reserven citas sin llamarte.</p>
+          </div>
+        </div>
+
+        {/* Link display */}
+        <div className="bg-slate-50 rounded-xl border border-slate-200 p-3 flex items-center gap-2">
+          <span className="flex-1 text-sm text-slate-700 font-mono truncate">{bookingUrl}</span>
+          <button
+            onClick={handleCopy}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+          >
+            {copied ? (
+              <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Copiado</>
+            ) : (
+              <><Copy className="w-3.5 h-3.5" /> Copiar</>
+            )}
+          </button>
+          <a
+            href={bookingUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            title="Abrir en nueva pestaña"
+          >
+            <ExternalLink className="w-4 h-4" />
+          </a>
+        </div>
+
+        {/* Slug editor */}
+        <div>
+          <label className="text-xs font-medium text-slate-600 mb-1.5 block">URL personalizada</label>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 flex items-center border border-slate-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
+              <span className="px-2.5 py-2 text-xs text-slate-400 bg-slate-50 border-r border-slate-200 whitespace-nowrap">/book/</span>
+              <input
+                type="text"
+                value={slug}
+                onChange={(e) => { setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '')); setEditing(true); }}
+                placeholder={String(business?.id ?? '')}
+                className="flex-1 px-2.5 py-2 text-sm focus:outline-none bg-white"
+                maxLength={50}
+              />
+            </div>
+            {editing && (
+              <>
+                <button
+                  onClick={handleSaveSlug}
+                  disabled={saving || slug.length < 3}
+                  className="px-3 py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {saving ? 'Guardando...' : 'Guardar'}
+                </button>
+                <button
+                  onClick={() => { setSlug(business?.booking_slug ?? String(business?.id ?? '')); setEditing(false); setError(''); }}
+                  className="px-3 py-2 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-500 transition-colors"
+                >
+                  Cancelar
+                </button>
+              </>
+            )}
+          </div>
+          {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+          <p className="text-[10px] text-slate-400 mt-1.5">Solo letras minúsculas, números y guiones. Mínimo 3 caracteres.</p>
+        </div>
+      </div>
+
+      {/* How it works */}
+      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 space-y-3">
+        <p className="text-xs font-bold text-blue-700">¿Cómo funciona?</p>
+        <div className="space-y-2">
+          {[
+            { n: 1, text: 'El cliente abre tu link de reserva' },
+            { n: 2, text: 'Elige el servicio, fecha y hora disponible' },
+            { n: 3, text: 'Ingresa su nombre y teléfono' },
+            { n: 4, text: 'La cita aparece en tu Calendario automáticamente' },
+          ].map(({ n, text }) => (
+            <div key={n} className="flex items-center gap-2.5 text-xs text-blue-700">
+              <span className="w-5 h-5 bg-blue-200 rounded-full flex items-center justify-center font-bold text-blue-700 shrink-0 text-[10px]">{n}</span>
+              {text}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Share tips */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
+        <p className="text-xs font-bold text-slate-700 mb-2">💡 Dónde compartir tu link</p>
+        {[
+          'Descripción de tu perfil de WhatsApp Business',
+          'Bio de Instagram / TikTok',
+          'Botón en tu sitio web',
+          'Mensaje de bienvenida automático',
+          'Tarjetas de presentación (QR)',
+        ].map((tip) => (
+          <div key={tip} className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="text-emerald-500">✓</span> {tip}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Settings Page ──────────────────────────────────────────────────────
 export default function SettingsPage() {
   const { activeBusinessId } = useBusiness();
   const { data: business, loading } = useApi(() => api.getBusiness(), [activeBusinessId]);
   const { data: aiLogs } = useApi(() => api.getAiLogs(), [activeBusinessId]);
-  const [activeTab, setActiveTab] = useState<'general' | 'channels' | 'templates' | 'memory' | 'services'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'channels' | 'templates' | 'memory' | 'services' | 'booking'>('general');
   const [form, setForm] = useState({
     name: '',
     nicho: 'salon',
@@ -473,6 +627,18 @@ export default function SettingsPage() {
             <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full" />
           )}
         </button>
+        <button
+          onClick={() => setActiveTab('booking')}
+          className={cn(
+            'pb-3 text-sm font-medium transition-colors relative',
+            activeTab === 'booking' ? 'text-blue-600' : 'text-slate-500 hover:text-slate-700'
+          )}
+        >
+          Citas Online
+          {activeTab === 'booking' && (
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full" />
+          )}
+        </button>
       </div>
 
       {activeTab === 'channels' ? (
@@ -483,6 +649,8 @@ export default function SettingsPage() {
         <MemoriesTab />
       ) : activeTab === 'services' ? (
         <ServicesTab />
+      ) : activeTab === 'booking' ? (
+        <BookingTab />
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

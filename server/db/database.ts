@@ -221,6 +221,10 @@ export async function initDb() {
 
       -- Appointment reminders: track when 24h WhatsApp reminder was sent
       ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP;
+
+      -- Public booking slug: unique URL path per business (e.g. /book/mi-salon)
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS booking_slug TEXT;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_businesses_booking_slug ON businesses(booking_slug) WHERE booking_slug IS NOT NULL;
     `);
     console.log('[DB] PostgreSQL connected and schema initialized.');
   } catch (err) {

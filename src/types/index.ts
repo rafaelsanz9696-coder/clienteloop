@@ -8,6 +8,7 @@ export interface Business {
   working_hours: string;
   ai_context: string;
   created_at: string;
+  booking_slug?: string | null;
 }
 
 export interface Contact {

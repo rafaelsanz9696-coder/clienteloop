@@ -26,6 +26,7 @@ import reportsRouter from './routes/reports.js';
 import activityRouter from './routes/activity.js';
 import appointmentsRouter from './routes/appointments.js';
 import servicesRouter from './routes/services.js';
+import publicBookRouter from './routes/publicBook.js';
 import { errorLogger } from './middleware/errorLogger.js';
 import { requireAuth } from './middleware/auth.js';
 import { initSocket } from './lib/socket.js';
@@ -82,8 +83,9 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-// Public routes (Webhooks don't use JWT)
+// Public routes (no JWT required)
 app.use('/api/webhooks', webhookLimiter, webhooksRouter);
+app.use('/api/public/book', publicBookRouter);
 
 // Protected API Routes
 app.use('/api/business', requireAuth, businessRouter);

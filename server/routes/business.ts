@@ -108,4 +108,38 @@ router.delete('/channels/:id', async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// PATCH /api/business/booking-slug — update booking slug for active business
+router.patch('/booking-slug', async (req: AuthenticatedRequest, res) => {
+  try {
+    const businessId = req.user!.business_id;
+    const { booking_slug } = req.body;
+
+    // Validate: lowercase alphanumeric + hyphens only, 3-50 chars
+    const slug = (booking_slug ?? '').toString().toLowerCase().trim();
+    if (slug && !/^[a-z0-9-]{3,50}$/.test(slug)) {
+      return res.status(400).json({ error: 'Slug inválido. Solo letras, números y guiones (3-50 caracteres).' });
+    }
+
+    // Check uniqueness
+    if (slug) {
+      const { rows } = await db.query(
+        'SELECT id FROM businesses WHERE booking_slug = $1 AND id != $2',
+        [slug, businessId]
+      );
+      if (rows.length > 0) {
+        return res.status(409).json({ error: 'Ese slug ya está en uso. Elige otro.' });
+      }
+    }
+
+    await db.query(
+      'UPDATE businesses SET booking_slug = $1 WHERE id = $2',
+      [slug || null, businessId]
+    );
+    res.json({ success: true, booking_slug: slug || null });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'DB Error' });
+  }
+});
+
 export default router;

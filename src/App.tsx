@@ -11,6 +11,7 @@ import AppointmentsPage from './pages/AppointmentsPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import LandingPage from './pages/LandingPage';
+import BookingPage from './pages/BookingPage';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 import OnboardingPage from './pages/OnboardingPage';
 import LoadingSpinner from './components/ui/LoadingSpinner';
@@ -39,6 +40,9 @@ export default function App() {
       {/* Public auth routes — redirect logged-in users to dashboard */}
       <Route path="/login" element={user ? <Navigate to="/app" replace /> : <LoginPage />} />
       <Route path="/register" element={user ? <Navigate to="/app" replace /> : <RegisterPage />} />
+
+      {/* Public booking page — accessible without login */}
+      <Route path="/book/:slug" element={<BookingPage />} />
 
       {/* Protected routes — requires auth + at least one business */}
       <Route path="/app" element={<ProtectedRoute />}>
