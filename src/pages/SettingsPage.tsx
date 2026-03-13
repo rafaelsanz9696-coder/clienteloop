@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Save, CheckCircle2, History, Upload, Sparkles, X, Plus, Trash2, MessageSquare, Mail, Phone } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Save, CheckCircle2, History, Upload, Sparkles, X, Plus, Trash2, MessageSquare, Mail, Phone, CreditCard, Users, AlertTriangle, ExternalLink, Zap } from 'lucide-react';
 import { cn, formatRelativeTime } from '../lib/utils';
 import { api } from '../lib/api';
 import { useApi } from '../hooks/useApi';
@@ -153,12 +154,208 @@ function ChannelsTab() {
   );
 }
 
+// ─── Billing Tab ─────────────────────────────────────────────────────────────
+function BillingTab() {
+  const { data: sub, loading, refetch } = useApi(() => api.getBillingSubscription(), []);
+  const [seats, setSeats] = useState(3);
+  const [seatsBusy, setSeatsBusy] = useState(false);
+  const [portalBusy, setPortalBusy] = useState(false);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+
+  useEffect(() => {
+    if (sub) setSeats(sub.seats);
+  }, [sub]);
+
+  async function handleCheckout() {
+    setCheckoutBusy(true);
+    try {
+      const { url } = await api.createCheckoutSession(seats);
+      window.location.href = url!;
+    } catch (err: any) {
+      alert('Error al abrir el checkout: ' + err.message);
+      setCheckoutBusy(false);
+    }
+  }
+
+  async function handlePortal() {
+    setPortalBusy(true);
+    try {
+      const { url } = await api.createBillingPortal();
+      window.location.href = url!;
+    } catch (err: any) {
+      alert('Error al abrir el portal: ' + err.message);
+      setPortalBusy(false);
+    }
+  }
+
+  async function handleUpdateSeats() {
+    setSeatsBusy(true);
+    try {
+      await api.updateBillingSeats(seats);
+      refetch();
+    } catch (err: any) {
+      alert('Error al actualizar seats: ' + err.message);
+    } finally {
+      setSeatsBusy(false);
+    }
+  }
+
+  if (loading) return <div className="py-12 text-center text-slate-400 text-sm">Cargando info de facturación...</div>;
+
+  const isActive = sub?.status === 'active';
+  const isPastDue = sub?.status === 'past_due';
+  const isCanceled = sub?.status === 'canceled' || sub?.status === 'inactive';
+  const totalDisplay = sub ? `$${(sub.monthly_total_cents / 100).toFixed(0)}/mes` : '$100/mes';
+
+  return (
+    <div className="space-y-5">
+      {/* Current Plan Card */}
+      <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <Zap className="w-4 h-4 text-blue-500" />
+              ClienteLoop Pro
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">IA agéntica incluida · $100/mes base + $20/seat extra</p>
+          </div>
+          {isActive && (
+            <span className="text-[10px] font-bold bg-green-100 text-green-600 px-2 py-0.5 rounded-full uppercase tracking-wide">Activo</span>
+          )}
+          {isPastDue && (
+            <span className="text-[10px] font-bold bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full uppercase tracking-wide flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3" /> Pago pendiente
+            </span>
+          )}
+          {isCanceled && (
+            <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full uppercase tracking-wide">Sin suscripción</span>
+          )}
+        </div>
+
+        {/* Billing summary */}
+        <div className="grid grid-cols-3 gap-3 py-4 border-y border-slate-100 mb-4">
+          <div className="text-center">
+            <p className="text-lg font-bold text-slate-800">{totalDisplay}</p>
+            <p className="text-[11px] text-slate-400">Total mensual</p>
+          </div>
+          <div className="text-center border-x border-slate-100">
+            <p className="text-lg font-bold text-slate-800">{sub?.seats ?? 3}</p>
+            <p className="text-[11px] text-slate-400">Seats activos</p>
+          </div>
+          <div className="text-center">
+            <p className="text-lg font-bold text-slate-800">{sub?.extra_seats ?? 0}</p>
+            <p className="text-[11px] text-slate-400">Seats extra (+$20/c.u.)</p>
+          </div>
+        </div>
+
+        {/* Period info */}
+        {sub?.period_end && (
+          <p className="text-xs text-slate-400 mb-4">
+            Próximo cobro: <span className="text-slate-600 font-medium">{new Date(sub.period_end).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+          </p>
+        )}
+
+        {/* Actions */}
+        {isActive || isPastDue ? (
+          <button
+            onClick={handlePortal}
+            disabled={portalBusy}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 text-white text-sm font-medium rounded-lg hover:bg-slate-900 disabled:opacity-50 transition-colors"
+          >
+            <ExternalLink className="w-4 h-4" />
+            {portalBusy ? 'Abriendo portal...' : 'Gestionar suscripción'}
+          </button>
+        ) : (
+          <button
+            onClick={handleCheckout}
+            disabled={checkoutBusy}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            <CreditCard className="w-4 h-4" />
+            {checkoutBusy ? 'Redirigiendo...' : 'Suscribirse — $100/mes'}
+          </button>
+        )}
+      </div>
+
+      {/* Seat Manager (only if active) */}
+      {isActive && (
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-1">
+            <Users className="w-4 h-4 text-blue-500" />
+            Gestión de Empleados (Seats)
+          </h3>
+          <p className="text-xs text-slate-400 mb-4">
+            Los primeros 3 seats están incluidos en el plan base. Cada seat adicional cuesta $20/mes.
+          </p>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSeats((s) => Math.max(3, s - 1))}
+                className="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 font-bold text-lg flex items-center justify-center transition-colors"
+              >
+                −
+              </button>
+              <span className="text-xl font-bold text-slate-800 w-8 text-center">{seats}</span>
+              <button
+                onClick={() => setSeats((s) => s + 1)}
+                className="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 font-bold text-lg flex items-center justify-center transition-colors"
+              >
+                +
+              </button>
+            </div>
+            <div className="flex-1">
+              <p className="text-xs text-slate-500">
+                {seats <= 3
+                  ? '3 seats incluidos (sin costo extra)'
+                  : `3 incluidos + ${seats - 3} extras × $20 = +$${(seats - 3) * 20}/mes`}
+              </p>
+            </div>
+            <button
+              onClick={handleUpdateSeats}
+              disabled={seatsBusy || seats === (sub?.seats ?? 3)}
+              className="px-4 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
+            >
+              {seatsBusy ? 'Actualizando...' : 'Aplicar cambio'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Pricing breakdown */}
+      {isCanceled && (
+        <div className="bg-slate-50 rounded-xl border border-slate-200 p-6">
+          <h3 className="text-sm font-bold text-slate-700 mb-3">¿Qué incluye el plan?</h3>
+          <ul className="space-y-2 text-sm text-slate-600">
+            {[
+              'IA agéntica para respuesta automática de clientes',
+              'Inbox multicanal (WhatsApp, Instagram, SMS)',
+              'CRM completo: contactos, pipeline, tareas',
+              'Dashboard y métricas en tiempo real',
+              '3 seats incluidos (empleados)',
+              'Soporte por WhatsApp',
+            ].map((item) => (
+              <li key={item} className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Settings Page ──────────────────────────────────────────────────────
 export default function SettingsPage() {
   const { activeBusinessId } = useBusiness();
   const { data: business, loading } = useApi(() => api.getBusiness(), [activeBusinessId]);
   const { data: aiLogs } = useApi(() => api.getAiLogs(), [activeBusinessId]);
-  const [activeTab, setActiveTab] = useState<'general' | 'channels' | 'templates'>('general');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<'general' | 'channels' | 'templates' | 'billing'>(() => {
+    const tab = searchParams.get('tab');
+    return (tab === 'billing' || tab === 'channels' || tab === 'templates') ? tab : 'general';
+  });
   const [form, setForm] = useState({
     name: '',
     nicho: 'salon',
@@ -329,9 +526,24 @@ export default function SettingsPage() {
             <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full" />
           )}
         </button>
+        <button
+          onClick={() => setActiveTab('billing')}
+          className={cn(
+            'pb-3 text-sm font-medium transition-colors relative flex items-center gap-1.5',
+            activeTab === 'billing' ? 'text-blue-600' : 'text-slate-500 hover:text-slate-700'
+          )}
+        >
+          <CreditCard className="w-3.5 h-3.5" />
+          Facturación
+          {activeTab === 'billing' && (
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full" />
+          )}
+        </button>
       </div>
 
-      {activeTab === 'channels' ? (
+      {activeTab === 'billing' ? (
+        <BillingTab />
+      ) : activeTab === 'channels' ? (
         <ChannelsTab />
       ) : activeTab === 'templates' ? (
         <QuickRepliesTab />

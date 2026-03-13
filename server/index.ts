@@ -20,6 +20,7 @@ import { errorLogger } from './middleware/errorLogger.js';
 import { requireAuth } from './middleware/auth.js';
 import { initSocket } from './lib/socket.js';
 import { initDb } from './db/database.js';
+import billingRouter, { stripeWebhookHandler } from './routes/billing.js';
 
 initDb().catch(console.error);
 
@@ -58,6 +59,13 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+// Stripe webhook — must come before express.json(), needs raw body
+app.post(
+  '/api/billing/webhook',
+  express.raw({ type: 'application/json' }),
+  stripeWebhookHandler
+);
+
 // Public routes (Webhooks don't use JWT)
 app.use('/api/webhooks', webhookLimiter, webhooksRouter);
 
@@ -71,6 +79,7 @@ app.use('/api/tasks', requireAuth, tasksRouter);
 app.use('/api/stats', requireAuth, statsRouter);
 app.use('/api/ai', requireAuth, aiRouter);
 app.use('/api/quick-replies', requireAuth, quickRepliesRouter);
+app.use('/api/billing', requireAuth, billingRouter);
 
 // Global error handler
 app.use(errorLogger);

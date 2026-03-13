@@ -153,6 +153,31 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  // Billing
+  getBillingSubscription: () =>
+    request<{
+      status: string;
+      seats: number;
+      included_seats: number;
+      extra_seats: number;
+      monthly_total_cents: number;
+      period_end: string | null;
+      trial_ends_at: string | null;
+      has_subscription: boolean;
+    }>('/billing/subscription'),
+  createCheckoutSession: (seats: number) =>
+    request<{ url: string }>('/billing/create-checkout', {
+      method: 'POST',
+      body: JSON.stringify({ seats }),
+    }),
+  createBillingPortal: () =>
+    request<{ url: string }>('/billing/create-portal', { method: 'POST' }),
+  updateBillingSeats: (seats: number) =>
+    request<{ seats: number; extra_seats: number }>('/billing/seats', {
+      method: 'PATCH',
+      body: JSON.stringify({ seats }),
+    }),
+
   // Channel Numbers
   getChannelNumbers: () =>
     request<{ id: number; business_id: number; channel: string; identifier: string; label: string; created_at: string }[]>(

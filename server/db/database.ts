@@ -149,6 +149,14 @@ export async function initDb() {
 
       -- Message delivery status tracking
       ALTER TABLE messages ADD COLUMN IF NOT EXISTS delivery_status TEXT DEFAULT 'sent';
+
+      -- Stripe billing columns
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'inactive';
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS subscription_seats INTEGER DEFAULT 3;
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS subscription_period_end TIMESTAMP;
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMP;
     `);
     console.log('[DB] PostgreSQL connected and schema initialized.');
   } catch (err) {
