@@ -3,6 +3,7 @@ import db from '../db/database.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
 import { checkConflict, getAvailableSlots } from '../lib/appointments.js';
 import { logActivity } from '../lib/activity.js';
+import { sendDirectWhatsApp } from '../channels/whatsapp.adapter.js';
 
 const router = Router();
 
@@ -151,6 +152,74 @@ router.patch('/:id/status', async (req: AuthenticatedRequest, res) => {
       [status, req.params.id, req.user!.business_id]
     );
     res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'DB Error' });
+  }
+});
+
+// POST /api/appointments/:id/remind — manual WhatsApp reminder
+router.post('/:id/remind', async (req: AuthenticatedRequest, res) => {
+  try {
+    const bid = req.user!.business_id;
+
+    // Load appointment with contact + business info
+    const { rows } = await db.query(`
+      SELECT a.id, a.title, a.start_time, a.reminder_sent_at,
+             ct.name AS contact_name, ct.phone AS phone,
+             b.name  AS business_name
+      FROM appointments a
+      JOIN contacts ct   ON ct.id = a.contact_id
+      JOIN businesses b  ON b.id  = a.business_id
+      WHERE a.id = $1 AND a.business_id = $2
+    `, [req.params.id, bid]);
+
+    if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    const appt = rows[0];
+
+    if (!appt.phone) {
+      return res.status(400).json({ sent: false, reason: 'Contact has no phone number' });
+    }
+
+    // Resolve phoneId
+    const { rows: cRows } = await db.query(
+      `SELECT identifier FROM channel_numbers WHERE business_id = $1 AND channel = 'whatsapp' LIMIT 1`,
+      [bid]
+    );
+    const phoneId = cRows[0]?.identifier ?? process.env.META_PHONE_ID ?? '';
+
+    if (!phoneId) {
+      return res.status(400).json({ sent: false, reason: 'No WhatsApp phoneId configured' });
+    }
+
+    const startTime = new Date(appt.start_time);
+    const dayStr = startTime.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+    const timeStr = startTime.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+    const message =
+      `Hola ${appt.contact_name} 👋 Te recordamos que tu cita de *${appt.title}* en *${appt.business_name}* ` +
+      `es el *${dayStr}* a las *${timeStr}*. ¡Te esperamos! 📅\n\n` +
+      `Si necesitas cambiar o cancelar, avísanos con tiempo.`;
+
+    const result = await sendDirectWhatsApp(appt.phone, message, phoneId);
+
+    if (result.sent) {
+      await db.query(
+        'UPDATE appointments SET reminder_sent_at = NOW() WHERE id = $1',
+        [appt.id]
+      );
+      // Re-fetch updated row
+      const { rows: updated } = await db.query(
+        `SELECT a.*, ct.name as contact_name, s.name as service_name
+         FROM appointments a
+         LEFT JOIN contacts ct ON ct.id = a.contact_id
+         LEFT JOIN services  s ON s.id  = a.service_id
+         WHERE a.id = $1`, [appt.id]
+      );
+      return res.json({ sent: true, phone: appt.phone, appointment: updated[0] });
+    }
+
+    res.json({ sent: false, reason: result.reason });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'DB Error' });

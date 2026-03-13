@@ -162,6 +162,7 @@ export interface Appointment {
   contact_name?: string;
   service_name?: string;
   created_at: string;
+  reminder_sent_at?: string | null;
 }
 
 export interface Service {

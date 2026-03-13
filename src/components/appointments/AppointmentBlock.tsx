@@ -87,6 +87,16 @@ export default function AppointmentBlock({
           {formatTime(appointment.start_time)} – {formatTime(appointment.end_time)}
         </div>
       )}
+
+      {/* Reminder sent badge */}
+      {appointment.reminder_sent_at && (
+        <span
+          className="absolute bottom-0.5 right-0.5 text-[9px] leading-none"
+          title={`Recordatorio enviado ${new Date(appointment.reminder_sent_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })}`}
+        >
+          📱
+        </span>
+      )}
     </div>
   );
 }

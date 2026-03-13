@@ -244,6 +244,10 @@ export const api = {
     request<{ success: boolean }>(`/appointments/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   deleteAppointment: (id: number) =>
     request<{ success: boolean }>(`/appointments/${id}`, { method: 'DELETE' }),
+  sendReminder: (id: number) =>
+    request<{ sent: boolean; phone?: string; reason?: string; appointment?: Appointment }>(
+      `/appointments/${id}/remind`, { method: 'POST' }
+    ),
 
   // Services
   getServices: () => request<Service[]>('/services'),

@@ -30,8 +30,22 @@ import { errorLogger } from './middleware/errorLogger.js';
 import { requireAuth } from './middleware/auth.js';
 import { initSocket } from './lib/socket.js';
 import { initDb } from './db/database.js';
+import { checkAndSendReminders } from './lib/reminder-scheduler.js';
 
 initDb().catch(console.error);
+
+// ─── Appointment reminder scheduler (every 5 minutes) ────────────────────────
+const REMINDER_INTERVAL_MS = 5 * 60 * 1000;
+console.log('[Scheduler] Started, checking every 5 min');
+setInterval(async () => {
+  try { await checkAndSendReminders(); }
+  catch (err) { console.error('[Scheduler] Error:', err); }
+}, REMINDER_INTERVAL_MS);
+// Run once on startup (after a short delay so DB is ready)
+setTimeout(async () => {
+  try { await checkAndSendReminders(); }
+  catch (err) { console.error('[Scheduler] Startup check error:', err); }
+}, 10_000);
 
 const app = express();
 const httpServer = createServer(app);

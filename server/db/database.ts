@@ -218,6 +218,9 @@ export async function initDb() {
       );
       CREATE INDEX IF NOT EXISTS idx_appointments_business_time ON appointments(business_id, start_time);
       CREATE INDEX IF NOT EXISTS idx_appointments_contact       ON appointments(contact_id);
+
+      -- Appointment reminders: track when 24h WhatsApp reminder was sent
+      ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP;
     `);
     console.log('[DB] PostgreSQL connected and schema initialized.');
   } catch (err) {

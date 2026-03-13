@@ -2,6 +2,59 @@ import db from '../db/database.js';
 import { AutomationService } from '../lib/automation.js';
 import { getIo } from '../lib/socket.js';
 
+/**
+ * Send a WhatsApp message directly to a phone number without a conversation.
+ * Used for appointment reminders — bypasses DB logging and socket emission.
+ */
+export async function sendDirectWhatsApp(
+  phone: string,
+  text: string,
+  phoneId: string
+): Promise<{ sent: boolean; reason?: string }> {
+  const cleanPhone = phone.replace(/\D/g, '');
+  if (!cleanPhone) return { sent: false, reason: 'Invalid phone number' };
+
+  if (process.env.ENABLE_CHANNELS !== 'true') {
+    console.log(`[Reminder] CHANNELS disabled — would send to +${cleanPhone}: "${text.substring(0, 60)}..."`);
+    return { sent: true, reason: 'simulated (ENABLE_CHANNELS=false)' };
+  }
+
+  const token = process.env.META_ACCESS_TOKEN;
+  if (!token || !phoneId) {
+    console.warn('[Reminder] Meta credentials missing — skipping send');
+    return { sent: false, reason: 'Missing META credentials' };
+  }
+
+  try {
+    const response = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: cleanPhone,
+        type: 'text',
+        text: { preview_url: false, body: text },
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[Reminder] Meta API error ${response.status}:`, errText);
+      return { sent: false, reason: `Meta API ${response.status}` };
+    }
+
+    console.log(`[Reminder] ✅ Sent to +${cleanPhone}`);
+    return { sent: true };
+  } catch (err) {
+    console.error('[Reminder] Fetch failed:', err);
+    return { sent: false, reason: 'Network error' };
+  }
+}
+
 export const WhatsAppAdapter = {
   async sendMessage(conversationId: number, text: string) {
     console.log(`[WhatsApp] Sending message to conversation ${conversationId}: ${text}`);

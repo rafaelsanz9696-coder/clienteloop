@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   ChevronLeft, ChevronRight, Plus, X, Loader2, CalendarDays,
-  CheckCircle2, XCircle, Clock, Trash2, Edit2, User, Wrench,
+  CheckCircle2, XCircle, Clock, Trash2, Edit2, User, Wrench, Smartphone,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { api } from '../lib/api';
@@ -329,6 +329,9 @@ interface ViewModalProps {
 }
 function ViewAppointmentModal({ appointment, onClose, onRefresh }: ViewModalProps) {
   const [acting, setActing] = useState('');
+  const [reminderSentAt, setReminderSentAt] = useState<string | null>(
+    appointment.reminder_sent_at ?? null
+  );
 
   async function changeStatus(status: string) {
     setActing(status);
@@ -347,6 +350,23 @@ function ViewAppointmentModal({ appointment, onClose, onRefresh }: ViewModalProp
       onRefresh();
       onClose();
     } finally { setActing(''); }
+  }
+
+  async function handleSendReminder() {
+    setActing('remind');
+    try {
+      const result = await api.sendReminder(appointment.id);
+      if (result.sent) {
+        setReminderSentAt(result.appointment?.reminder_sent_at ?? new Date().toISOString());
+        onRefresh();
+      } else {
+        alert(`No se pudo enviar el recordatorio: ${result.reason}`);
+      }
+    } catch (err: any) {
+      alert(err.message ?? 'Error al enviar recordatorio');
+    } finally {
+      setActing('');
+    }
   }
 
   const sb = STATUS_LABELS[appointment.status] ?? STATUS_LABELS.confirmed;
@@ -396,6 +416,17 @@ function ViewAppointmentModal({ appointment, onClose, onRefresh }: ViewModalProp
             <p className="text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2">{appointment.notes}</p>
           )}
 
+          {/* Reminder status */}
+          <div className={cn(
+            'flex items-center gap-2 text-xs px-3 py-2 rounded-lg',
+            reminderSentAt ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-50 text-slate-500'
+          )}>
+            <Smartphone className="w-3.5 h-3.5 shrink-0" />
+            {reminderSentAt
+              ? `📱 Recordatorio enviado · ${new Date(reminderSentAt).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })}`
+              : 'Sin recordatorio enviado'}
+          </div>
+
           {/* Action buttons */}
           <div className="pt-2 space-y-2">
             {appointment.status === 'pending' && (
@@ -419,6 +450,15 @@ function ViewAppointmentModal({ appointment, onClose, onRefresh }: ViewModalProp
                 {acting === 'cancelled' ? 'Cancelando...' : 'Cancelar Cita'}
               </button>
             )}
+            {/* Send reminder manually — only if contact has phone & not yet sent */}
+            {!reminderSentAt && appointment.status !== 'cancelled' && appointment.status !== 'completed' && (
+              <button onClick={handleSendReminder} disabled={!!acting}
+                className="w-full flex items-center justify-center gap-2 py-2 text-sm border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors">
+                <Smartphone className="w-4 h-4" />
+                {acting === 'remind' ? 'Enviando...' : 'Enviar recordatorio ahora'}
+              </button>
+            )}
+
             <button onClick={handleDelete} disabled={!!acting}
               className="w-full flex items-center justify-center gap-2 py-2 text-sm border border-slate-200 text-slate-500 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors">
               <Trash2 className="w-4 h-4" />
