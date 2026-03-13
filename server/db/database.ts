@@ -225,6 +225,32 @@ export async function initDb() {
       -- Public booking slug: unique URL path per business (e.g. /book/mi-salon)
       ALTER TABLE businesses ADD COLUMN IF NOT EXISTS booking_slug TEXT;
       CREATE UNIQUE INDEX IF NOT EXISTS idx_businesses_booking_slug ON businesses(booking_slug) WHERE booking_slug IS NOT NULL;
+
+      -- Broadcasts: mass WhatsApp message campaigns
+      CREATE TABLE IF NOT EXISTS broadcasts (
+        id              SERIAL PRIMARY KEY,
+        business_id     INTEGER NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+        name            TEXT    NOT NULL,
+        message         TEXT    NOT NULL,
+        status          TEXT    DEFAULT 'draft',  -- draft | sending | completed | failed
+        recipient_count INTEGER DEFAULT 0,
+        sent_count      INTEGER DEFAULT 0,
+        failed_count    INTEGER DEFAULT 0,
+        created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        sent_at         TIMESTAMP
+      );
+      CREATE TABLE IF NOT EXISTS broadcast_recipients (
+        id           SERIAL PRIMARY KEY,
+        broadcast_id INTEGER NOT NULL REFERENCES broadcasts(id) ON DELETE CASCADE,
+        contact_id   INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
+        phone        TEXT    NOT NULL,
+        name         TEXT    NOT NULL,
+        status       TEXT    DEFAULT 'pending',  -- pending | sent | failed
+        error        TEXT,
+        sent_at      TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_broadcasts_business_id          ON broadcasts(business_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_broadcast_recipients_broadcast  ON broadcast_recipients(broadcast_id);
     `);
     console.log('[DB] PostgreSQL connected and schema initialized.');
   } catch (err) {

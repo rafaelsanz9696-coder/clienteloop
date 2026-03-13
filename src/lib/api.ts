@@ -15,6 +15,7 @@ import type {
   ReportData,
   Appointment,
   Service,
+  Broadcast,
 } from '../types/index';
 import { supabase } from './supabase';
 
@@ -272,4 +273,19 @@ export const api = {
     request<BusinessMemory>(`/memories/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteMemory: (id: number) =>
     request<{ success: boolean }>(`/memories/${id}`, { method: 'DELETE' }),
+
+  // Broadcasts
+  getBroadcasts: () => request<Broadcast[]>('/broadcasts'),
+  getBroadcast: (id: number) => request<Broadcast>(`/broadcasts/${id}`),
+  previewBroadcastCount: (type: string, value?: string) => {
+    const qs = new URLSearchParams({ type });
+    if (value) qs.set('value', value);
+    return request<{ count: number }>(`/broadcasts/preview/count?${qs}`);
+  },
+  createBroadcast: (data: { name: string; message: string; filter: { type: string; value?: string } }) =>
+    request<Broadcast>('/broadcasts', { method: 'POST', body: JSON.stringify(data) }),
+  sendBroadcast: (id: number) =>
+    request<{ started: boolean; broadcast_id: number }>(`/broadcasts/${id}/send`, { method: 'POST' }),
+  deleteBroadcast: (id: number) =>
+    request<{ success: boolean }>(`/broadcasts/${id}`, { method: 'DELETE' }),
 };

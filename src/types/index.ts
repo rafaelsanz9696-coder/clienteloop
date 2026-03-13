@@ -175,6 +175,31 @@ export interface Service {
   active: boolean;
 }
 
+export interface Broadcast {
+  id: number;
+  business_id: number;
+  name: string;
+  message: string;
+  status: 'draft' | 'sending' | 'completed' | 'failed';
+  recipient_count: number;
+  sent_count: number;
+  failed_count: number;
+  created_at: string;
+  sent_at: string | null;
+  recipients?: BroadcastRecipient[];
+}
+
+export interface BroadcastRecipient {
+  id: number;
+  broadcast_id: number;
+  contact_id: number | null;
+  phone: string;
+  name: string;
+  status: 'pending' | 'sent' | 'failed';
+  error: string | null;
+  sent_at: string | null;
+}
+
 export type MemoryType = 'style' | 'faq' | 'pattern' | 'client_insight';
 
 export interface BusinessMemory {

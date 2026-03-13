@@ -8,6 +8,7 @@ import TasksPage from './pages/TasksPage';
 import SettingsPage from './pages/SettingsPage';
 import ReportsPage from './pages/ReportsPage';
 import AppointmentsPage from './pages/AppointmentsPage';
+import BroadcastPage from './pages/BroadcastPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import LandingPage from './pages/LandingPage';
@@ -57,6 +58,7 @@ export default function App() {
             <Route path="tasks" element={<TasksPage />} />
             <Route path="appointments" element={<AppointmentsPage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route path="broadcast" element={<BroadcastPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Route>

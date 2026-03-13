@@ -14,6 +14,7 @@ import {
   LogOut,
   BarChart2,
   CalendarDays,
+  Megaphone,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useBusiness } from '../../contexts/BusinessContext';
@@ -26,6 +27,7 @@ const navItems = [
   { to: '/app/pipeline', icon: Kanban, label: 'Pipeline' },
   { to: '/app/tasks', icon: CheckCircle2, label: 'Tareas' },
   { to: '/app/appointments', icon: CalendarDays, label: 'Citas' },
+  { to: '/app/broadcast', icon: Megaphone, label: 'Difusión' },
   { to: '/app/reports', icon: BarChart2, label: 'Reportes' },
   { to: '/app/settings', icon: Settings, label: 'Ajustes' },
 ];
