@@ -2,9 +2,75 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { defineConfig } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.svg', 'pwa-192.svg', 'pwa-512.svg', 'robots.txt'],
+      manifest: {
+        name: 'ClienteLoop',
+        short_name: 'ClienteLoop',
+        description: 'Inbox unificado + CRM con IA para negocios',
+        theme_color: '#3B82F6',
+        background_color: '#0f172a',
+        display: 'standalone',
+        orientation: 'portrait',
+        start_url: '/app',
+        scope: '/',
+        lang: 'es',
+        icons: [
+          {
+            src: '/pwa-192.svg',
+            sizes: '192x192',
+            type: 'image/svg+xml',
+            purpose: 'any',
+          },
+          {
+            src: '/pwa-512.svg',
+            sizes: '512x512',
+            type: 'image/svg+xml',
+            purpose: 'any maskable',
+          },
+        ],
+        shortcuts: [
+          {
+            name: 'Inbox',
+            short_name: 'Inbox',
+            description: 'Ver mensajes',
+            url: '/app/inbox',
+            icons: [{ src: '/pwa-192.svg', sizes: '192x192' }],
+          },
+          {
+            name: 'Citas',
+            short_name: 'Citas',
+            description: 'Ver agenda de citas',
+            url: '/app/appointments',
+            icons: [{ src: '/pwa-192.svg', sizes: '192x192' }],
+          },
+        ],
+      },
+      workbox: {
+        // Cache app shell + static assets
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        runtimeCaching: [
+          {
+            // Network-first for API reads (stats, contacts, conversations)
+            urlPattern: /^https?:\/\/.*\/api\/(stats|contacts|conversations)/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-cache',
+              expiration: { maxEntries: 50, maxAgeSeconds: 5 * 60 },
+              networkTimeoutSeconds: 5,
+            },
+          },
+        ],
+      },
+    }),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),

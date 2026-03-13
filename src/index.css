@@ -13,3 +13,19 @@
 .glass-card {
   @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-sm;
 }
+
+/* PWA / iOS safe area insets */
+.safe-area-inset-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Prevent iOS tap highlight on nav buttons */
+@layer base {
+  button, a {
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Smooth scrolling on iOS */
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+}

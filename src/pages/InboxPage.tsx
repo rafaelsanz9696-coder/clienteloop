@@ -638,7 +638,7 @@ export default function InboxPage() {
             <ErrorBoundary>
               <ConversationThread
                 conversationId={selectedId}
-                onBack={() => navigate('/inbox')}
+                onBack={() => navigate('/app/inbox')}
               />
             </ErrorBoundary>
           </div>
