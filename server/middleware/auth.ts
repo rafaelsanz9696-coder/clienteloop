@@ -17,7 +17,9 @@ function getSupabaseAuth() {
 export interface AuthenticatedRequest extends Request {
     user?: {
         id: string;
+        email: string;
         business_id: number;
+        role: 'admin' | 'agent';
     };
 }
 
@@ -46,18 +48,33 @@ export const requireAuth = async (req: AuthenticatedRequest, res: Response, next
 
         const supabaseUserId = user.id;
 
-        // Find the business associated with this Supabase user
-        const { rows } = await db.query(
-            'SELECT id FROM businesses WHERE supabase_user_id = $1',
+        // Get all businesses this user can access: owned ones + ones they're a member of
+        const { rows: bizRows } = await db.query(
+            `SELECT b.id,
+                    CASE WHEN b.supabase_user_id = $1 THEN 'admin' ELSE bm.role END AS role
+             FROM businesses b
+             LEFT JOIN business_members bm
+               ON bm.business_id = b.id AND bm.supabase_user_id = $1
+             WHERE b.supabase_user_id = $1 OR bm.supabase_user_id = $1
+             ORDER BY (b.supabase_user_id = $1)::int DESC, b.id ASC`,
             [supabaseUserId]
         );
-        const business = rows[0];
+
+        // Prefer x-business-id header (active business selection from frontend)
+        const requestedBid = Number(req.headers['x-business-id']) || 0;
+        let activeBiz = bizRows[0] || null;
+        if (requestedBid > 0) {
+            const match = bizRows.find((r) => r.id === requestedBid);
+            if (match) activeBiz = match;
+        }
 
         // If no business is linked yet (new user in onboarding), allow through
         // with business_id = 0. Routes that need a real business validate bid > 0.
         req.user = {
             id: supabaseUserId,
-            business_id: business ? business.id : 0,
+            email: user.email || '',
+            business_id: activeBiz ? activeBiz.id : 0,
+            role: (activeBiz?.role ?? 'admin') as 'admin' | 'agent',
         };
 
         next();

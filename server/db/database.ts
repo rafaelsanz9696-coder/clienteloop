@@ -251,6 +251,35 @@ export async function initDb() {
       );
       CREATE INDEX IF NOT EXISTS idx_broadcasts_business_id          ON broadcasts(business_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_broadcast_recipients_broadcast  ON broadcast_recipients(broadcast_id);
+
+      -- Team members: additional collaborators per business (agents / admins)
+      CREATE TABLE IF NOT EXISTS business_members (
+        id               SERIAL PRIMARY KEY,
+        business_id      INTEGER NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+        supabase_user_id TEXT    NOT NULL,
+        email            TEXT    NOT NULL DEFAULT '',
+        role             TEXT    NOT NULL DEFAULT 'agent', -- 'admin' | 'agent'
+        invited_by       TEXT,
+        joined_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(business_id, supabase_user_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_business_members_business ON business_members(business_id);
+      CREATE INDEX IF NOT EXISTS idx_business_members_user     ON business_members(supabase_user_id);
+
+      -- Team invitations: invite-link tokens
+      CREATE TABLE IF NOT EXISTS business_invitations (
+        id          SERIAL PRIMARY KEY,
+        business_id INTEGER NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+        email       TEXT,
+        role        TEXT    NOT NULL DEFAULT 'agent',
+        token       TEXT    NOT NULL UNIQUE,
+        invited_by  TEXT    NOT NULL,
+        expires_at  TIMESTAMP NOT NULL,
+        accepted_at TIMESTAMP,
+        accepted_by TEXT,
+        created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_business_invitations_token ON business_invitations(token);
     `);
     console.log('[DB] PostgreSQL connected and schema initialized.');
   } catch (err) {

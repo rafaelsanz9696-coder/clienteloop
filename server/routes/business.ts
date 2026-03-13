@@ -4,13 +4,20 @@ import { AuthenticatedRequest } from '../middleware/auth.js';
 
 const router = Router();
 
-// GET /api/business  — list all businesses
+// GET /api/business  — list all accessible businesses (owned + member)
 router.get('/', async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.user?.id;
-    const fallbackId = req.user?.business_id;
-
-    const { rows } = await db.query('SELECT id, name, nicho, owner_name FROM businesses WHERE supabase_user_id = $1 OR id = $2 ORDER BY id ASC', [userId, fallbackId]);
+    const { rows } = await db.query(
+      `SELECT b.id, b.name, b.nicho, b.owner_name, b.booking_slug,
+              CASE WHEN b.supabase_user_id = $1 THEN 'admin' ELSE bm.role END AS my_role
+       FROM businesses b
+       LEFT JOIN business_members bm
+         ON bm.business_id = b.id AND bm.supabase_user_id = $1
+       WHERE b.supabase_user_id = $1 OR bm.supabase_user_id = $1
+       ORDER BY (b.supabase_user_id = $1)::int DESC, b.id ASC`,
+      [userId]
+    );
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: 'DB Error' });

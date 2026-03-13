@@ -28,6 +28,7 @@ import appointmentsRouter from './routes/appointments.js';
 import servicesRouter from './routes/services.js';
 import publicBookRouter from './routes/publicBook.js';
 import broadcastsRouter from './routes/broadcasts.js';
+import teamRouter from './routes/team.js';
 import { errorLogger } from './middleware/errorLogger.js';
 import { requireAuth } from './middleware/auth.js';
 import { initSocket } from './lib/socket.js';
@@ -109,6 +110,7 @@ app.use('/api/activity', requireAuth, activityRouter);
 app.use('/api/appointments', requireAuth, appointmentsRouter);
 app.use('/api/services', requireAuth, servicesRouter);
 app.use('/api/broadcasts', requireAuth, broadcastsRouter);
+app.use('/api/team', requireAuth, teamRouter);
 
 // Global error handler
 app.use(errorLogger);

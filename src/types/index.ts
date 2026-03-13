@@ -9,6 +9,29 @@ export interface Business {
   ai_context: string;
   created_at: string;
   booking_slug?: string | null;
+  my_role?: 'admin' | 'agent';
+}
+
+export interface TeamMember {
+  id: number;
+  business_id: number;
+  supabase_user_id: string;
+  email: string;
+  role: 'admin' | 'agent';
+  invited_by: string | null;
+  joined_at: string;
+}
+
+export interface TeamInvitation {
+  id: number;
+  business_id: number;
+  email: string | null;
+  role: 'admin' | 'agent';
+  token: string;
+  invited_by: string;
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
 }
 
 export interface Contact {

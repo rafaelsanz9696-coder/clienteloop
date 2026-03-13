@@ -16,6 +16,8 @@ import type {
   Appointment,
   Service,
   Broadcast,
+  TeamMember,
+  TeamInvitation,
 } from '../types/index';
 import { supabase } from './supabase';
 
@@ -44,6 +46,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
+
+  // Tell backend which business is active (supports multi-business switching)
+  headers['x-business-id'] = String(_activeBusinessId);
 
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
@@ -288,4 +293,31 @@ export const api = {
     request<{ started: boolean; broadcast_id: number }>(`/broadcasts/${id}/send`, { method: 'POST' }),
   deleteBroadcast: (id: number) =>
     request<{ success: boolean }>(`/broadcasts/${id}`, { method: 'DELETE' }),
+
+  // Team management
+  getTeam: () =>
+    request<{ owner: any; members: TeamMember[]; limit: number; total: number; plan: string; my_role: string }>('/team'),
+  getTeamInvitations: () =>
+    request<TeamInvitation[]>('/team/invitations'),
+  previewInvite: (token: string) =>
+    request<{ business_id: number; business_name: string; role: string; expires_at: string }>(`/team/join/${token}`),
+  inviteMember: (data: { email?: string; role: 'admin' | 'agent' }) =>
+    request<{ token: string; link: string; expires_at: string }>('/team/invite', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  joinBusiness: (token: string) =>
+    request<{ success: boolean; business_id: number; business_name: string; role: string }>('/team/join', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
+  revokeInvitation: (id: number) =>
+    request<{ success: boolean }>(`/team/invitations/${id}`, { method: 'DELETE' }),
+  updateMemberRole: (memberId: number, role: 'admin' | 'agent') =>
+    request<TeamMember>(`/team/${memberId}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    }),
+  removeMember: (memberId: number) =>
+    request<{ success: boolean }>(`/team/${memberId}`, { method: 'DELETE' }),
 };

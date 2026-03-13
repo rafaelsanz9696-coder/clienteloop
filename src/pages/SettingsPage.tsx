@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
-import { Save, CheckCircle2, History, Upload, Sparkles, X, Plus, Trash2, MessageSquare, Mail, Phone, CalendarDays, Edit2, Link, Copy, ExternalLink } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Save, CheckCircle2, History, Upload, Sparkles, X, Plus, Trash2, MessageSquare, Mail, Phone, CalendarDays, Edit2, Link, Copy, ExternalLink, Users2, UserPlus, Shield, Crown, UserX, ChevronDown } from 'lucide-react';
 import { cn, formatRelativeTime } from '../lib/utils';
 import { api } from '../lib/api';
 import { useApi } from '../hooks/useApi';
@@ -9,6 +10,7 @@ import { parseWhatsAppChat, formatChatForAnalysis, getChatStats } from '../lib/c
 import QuickRepliesTab from '../components/settings/QuickRepliesTab';
 import MemoriesTab from '../components/settings/MemoriesTab';
 import AISetupAssistant from '../components/AISetupAssistant';
+import type { TeamMember, TeamInvitation } from '../types/index';
 
 const NICHOS = [
   { value: 'salon', label: 'Salón de Belleza / Estética' },
@@ -425,12 +427,347 @@ function BookingTab() {
   );
 }
 
+// ─── Team Tab ─────────────────────────────────────────────────────────────────
+const PLAN_LABELS: Record<string, string> = {
+  starter: 'Starter', pro: 'Pro', business: 'Business', enterprise: 'Enterprise',
+};
+const ROLE_LABELS: Record<string, string> = { admin: 'Admin', agent: 'Agente' };
+
+function TeamTab() {
+  const { activeBusinessId } = useBusiness();
+  const { data: team, loading, refetch } = useApi(() => api.getTeam(), [activeBusinessId]);
+  const { data: invitations, refetch: refetchInvites } = useApi(() => api.getTeamInvitations(), [activeBusinessId]);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'admin' | 'agent'>('agent');
+  const [inviting, setInviting] = useState(false);
+  const [inviteLink, setInviteLink] = useState('');
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [roleMenuId, setRoleMenuId] = useState<number | null>(null);
+
+  const isAdmin = team?.my_role === 'admin';
+
+  async function handleInvite() {
+    setInviting(true);
+    try {
+      const result = await api.inviteMember({ email: inviteEmail.trim() || undefined, role: inviteRole });
+      setInviteLink(result.link);
+      refetchInvites();
+    } catch (err: any) {
+      alert('Error: ' + (err.message || 'Intenta de nuevo'));
+      setShowInviteModal(false);
+    } finally {
+      setInviting(false);
+    }
+  }
+
+  function copyLink(link: string) {
+    navigator.clipboard.writeText(link);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  }
+
+  async function handleRoleChange(memberId: number, role: 'admin' | 'agent') {
+    try {
+      await api.updateMemberRole(memberId, role);
+      setRoleMenuId(null);
+      refetch();
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    }
+  }
+
+  async function handleRemove(memberId: number, email: string) {
+    if (!confirm(`¿Remover a ${email} del equipo?`)) return;
+    try {
+      await api.removeMember(memberId);
+      refetch();
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    }
+  }
+
+  async function handleRevokeInvite(id: number) {
+    try {
+      await api.revokeInvitation(id);
+      refetchInvites();
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    }
+  }
+
+  if (loading) return <LoadingSpinner text="Cargando equipo..." />;
+
+  return (
+    <div className="space-y-5">
+      {/* Plan + limits card */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <Users2 className="w-4 h-4 text-blue-500" />
+              Equipo
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Plan <span className="font-semibold text-slate-600">{PLAN_LABELS[team?.plan ?? 'starter']}</span>
+              {' — '}{team?.total ?? 1}/{team?.limit ?? 2} miembro{(team?.limit ?? 2) > 1 ? 's' : ''}
+            </p>
+          </div>
+          {isAdmin && (team?.total ?? 1) < (team?.limit ?? 2) && (
+            <button
+              onClick={() => { setInviteLink(''); setInviteEmail(''); setShowInviteModal(true); }}
+              className="flex items-center gap-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              Invitar
+            </button>
+          )}
+          {isAdmin && (team?.total ?? 1) >= (team?.limit ?? 2) && (
+            <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2 py-1 rounded-lg font-medium">
+              Límite alcanzado
+            </span>
+          )}
+        </div>
+
+        {/* Members list */}
+        <div className="space-y-2">
+          {/* Owner */}
+          {team?.owner && (
+            <div className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 rounded-lg border border-slate-100">
+              <div className="w-7 h-7 bg-blue-500/20 rounded-full flex items-center justify-center shrink-0">
+                <Crown className="w-3.5 h-3.5 text-blue-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-slate-700 truncate">
+                  {team.owner.name || team.owner.email}
+                </div>
+                {team.owner.email && team.owner.name && (
+                  <div className="text-xs text-slate-400 truncate">{team.owner.email}</div>
+                )}
+              </div>
+              <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded uppercase tracking-wide">
+                Dueño
+              </span>
+            </div>
+          )}
+
+          {/* Agent members */}
+          {(team?.members ?? []).map((m: TeamMember) => (
+            <div key={m.id} className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 rounded-lg border border-slate-100">
+              <div className="w-7 h-7 bg-slate-200 rounded-full flex items-center justify-center shrink-0 text-xs font-bold text-slate-500 uppercase">
+                {m.email.charAt(0)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-slate-700 truncate">{m.email}</div>
+                <div className="text-xs text-slate-400">
+                  Unido {new Date(m.joined_at).toLocaleDateString('es', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </div>
+              </div>
+
+              {/* Role badge / dropdown (admin only) */}
+              {isAdmin ? (
+                <div className="relative">
+                  <button
+                    onClick={() => setRoleMenuId(roleMenuId === m.id ? null : m.id)}
+                    className={cn(
+                      'flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded border uppercase tracking-wide transition-colors',
+                      m.role === 'admin'
+                        ? 'text-purple-600 bg-purple-50 border-purple-200 hover:bg-purple-100'
+                        : 'text-slate-500 bg-slate-100 border-slate-200 hover:bg-slate-200'
+                    )}
+                  >
+                    {m.role === 'admin' ? <Shield className="w-3 h-3" /> : null}
+                    {ROLE_LABELS[m.role]}
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+                  {roleMenuId === m.id && (
+                    <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-10 overflow-hidden text-xs">
+                      {(['agent', 'admin'] as const).map((r) => (
+                        <button
+                          key={r}
+                          onClick={() => handleRoleChange(m.id, r)}
+                          className={cn(
+                            'w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2',
+                            m.role === r && 'font-bold text-blue-600'
+                          )}
+                        >
+                          {r === 'admin' ? <Shield className="w-3 h-3" /> : <Users2 className="w-3 h-3" />}
+                          {ROLE_LABELS[r]}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <span className={cn(
+                  'text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wide',
+                  m.role === 'admin' ? 'text-purple-600 bg-purple-50 border-purple-200' : 'text-slate-500 bg-slate-100 border-slate-200'
+                )}>
+                  {ROLE_LABELS[m.role]}
+                </span>
+              )}
+
+              {isAdmin && (
+                <button
+                  onClick={() => handleRemove(m.id, m.email)}
+                  className="text-slate-300 hover:text-red-500 transition-colors ml-1"
+                  title="Remover del equipo"
+                >
+                  <UserX className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Pending invitations (admin only) */}
+      {isAdmin && invitations && invitations.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+            Invitaciones pendientes
+          </h4>
+          <div className="space-y-2">
+            {invitations.map((inv: TeamInvitation) => (
+              <div key={inv.id} className="flex items-center gap-3 px-3 py-2.5 bg-amber-50 rounded-lg border border-amber-100">
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-slate-700 truncate">
+                    {inv.email || 'Sin email especificado'}
+                  </div>
+                  <div className="text-xs text-slate-400">
+                    {ROLE_LABELS[inv.role]} · Expira {new Date(inv.expires_at).toLocaleDateString('es')}
+                  </div>
+                </div>
+                <button
+                  onClick={() => copyLink(`${window.location.origin}/app/settings?join=${inv.token}`)}
+                  className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                >
+                  <Copy className="w-3 h-3" /> Link
+                </button>
+                <button
+                  onClick={() => handleRevokeInvite(inv.id)}
+                  className="text-slate-300 hover:text-red-500 transition-colors"
+                  title="Revocar invitación"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Invite modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowInviteModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-blue-500" />
+                Invitar al equipo
+              </h3>
+              <button onClick={() => setShowInviteModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {!inviteLink ? (
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 mb-1.5 block uppercase tracking-wide">
+                    Email (opcional)
+                  </label>
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="colaborador@empresa.com"
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Solo como referencia. Cualquiera con el link puede unirse.</p>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 mb-2 block uppercase tracking-wide">Rol</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['agent', 'admin'] as const).map((r) => (
+                      <button
+                        key={r}
+                        onClick={() => setInviteRole(r)}
+                        className={cn(
+                          'flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 text-xs font-medium transition-all',
+                          inviteRole === r
+                            ? 'border-blue-500 bg-blue-50 text-blue-700'
+                            : 'border-slate-200 hover:border-slate-300 text-slate-500'
+                        )}
+                      >
+                        {r === 'admin' ? <Shield className="w-5 h-5" /> : <Users2 className="w-5 h-5" />}
+                        <span className="font-bold">{ROLE_LABELS[r]}</span>
+                        <span className="text-[10px] text-center leading-tight opacity-70">
+                          {r === 'admin' ? 'Acceso total + puede invitar' : 'Puede ver y responder mensajes'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  onClick={handleInvite}
+                  disabled={inviting}
+                  className="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {inviting ? 'Generando...' : 'Generar link de invitación'}
+                </button>
+              </div>
+            ) : (
+              <div className="p-5 space-y-4">
+                <div className="flex items-center gap-2 text-sm text-emerald-600 font-medium">
+                  <CheckCircle2 className="w-5 h-5" />
+                  Link generado — válido 7 días
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                  <p className="text-xs text-slate-500 mb-1.5">Comparte este link con tu colaborador:</p>
+                  <p className="text-xs font-mono text-slate-700 break-all">{inviteLink}</p>
+                </div>
+                <button
+                  onClick={() => copyLink(inviteLink)}
+                  className={cn(
+                    'w-full py-2.5 text-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors',
+                    linkCopied
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  )}
+                >
+                  <Copy className="w-4 h-4" />
+                  {linkCopied ? '¡Copiado!' : 'Copiar link'}
+                </button>
+                <button
+                  onClick={() => setShowInviteModal(false)}
+                  className="w-full py-2 text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Settings Page ──────────────────────────────────────────────────────
 export default function SettingsPage() {
   const { activeBusinessId } = useBusiness();
   const { data: business, loading } = useApi(() => api.getBusiness(), [activeBusinessId]);
   const { data: aiLogs } = useApi(() => api.getAiLogs(), [activeBusinessId]);
-  const [activeTab, setActiveTab] = useState<'general' | 'channels' | 'templates' | 'memory' | 'services' | 'booking'>('general');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<'general' | 'channels' | 'templates' | 'memory' | 'services' | 'booking' | 'team'>('general');
+
+  // Join-invite banner state
+  const joinToken = searchParams.get('join');
+  const [joinPreview, setJoinPreview] = useState<{ business_name: string; role: string } | null>(null);
+  const [joinStatus, setJoinStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [joinError, setJoinError] = useState('');
+  const { businesses, switchBusiness } = useBusiness();
   const [form, setForm] = useState({
     name: '',
     nicho: 'salon',
@@ -557,6 +894,30 @@ export default function SettingsPage() {
     }
   }
 
+  // If URL contains ?join=TOKEN, load preview info for the join banner
+  useEffect(() => {
+    if (!joinToken) return;
+    api.previewInvite(joinToken)
+      .then((data) => setJoinPreview({ business_name: data.business_name, role: data.role }))
+      .catch(() => setJoinPreview(null));
+  }, [joinToken]);
+
+  const handleJoin = useCallback(async () => {
+    if (!joinToken) return;
+    setJoinStatus('loading');
+    try {
+      const result = await api.joinBusiness(joinToken);
+      setJoinStatus('success');
+      // Remove the join param and reload businesses
+      setSearchParams({});
+      // Switch to the newly joined business after a brief delay
+      setTimeout(() => switchBusiness(result.business_id), 800);
+    } catch (err: any) {
+      setJoinStatus('error');
+      setJoinError(err.message || 'Error al unirse');
+    }
+  }, [joinToken, setSearchParams, switchBusiness]);
+
   if (loading) return <LoadingSpinner text="Cargando ajustes..." />;
 
   return (
@@ -565,6 +926,37 @@ export default function SettingsPage() {
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-bold text-slate-800">Ajustes</h2>
       </div>
+
+      {/* Join-invite banner */}
+      {joinToken && joinPreview && joinStatus !== 'success' && (
+        <div className="mb-5 bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+          <Users2 className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-blue-800">
+              Invitación: unirte a <span className="text-blue-600">{joinPreview.business_name}</span>
+            </p>
+            <p className="text-xs text-blue-600 mt-0.5">
+              Rol: <strong>{joinPreview.role === 'admin' ? 'Admin' : 'Agente'}</strong>
+            </p>
+            {joinStatus === 'error' && (
+              <p className="text-xs text-red-600 mt-1">{joinError}</p>
+            )}
+          </div>
+          <button
+            onClick={handleJoin}
+            disabled={joinStatus === 'loading'}
+            className="shrink-0 text-xs font-semibold bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors"
+          >
+            {joinStatus === 'loading' ? 'Uniéndose...' : 'Aceptar'}
+          </button>
+        </div>
+      )}
+      {joinToken && joinStatus === 'success' && (
+        <div className="mb-5 bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3">
+          <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+          <p className="text-sm font-semibold text-emerald-800">¡Te uniste al negocio! Cambiando...</p>
+        </div>
+      )}
 
       <div className="flex gap-4 mb-6 border-b border-slate-200">
         <button
@@ -639,6 +1031,18 @@ export default function SettingsPage() {
             <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full" />
           )}
         </button>
+        <button
+          onClick={() => setActiveTab('team')}
+          className={cn(
+            'pb-3 text-sm font-medium transition-colors relative',
+            activeTab === 'team' ? 'text-blue-600' : 'text-slate-500 hover:text-slate-700'
+          )}
+        >
+          Equipo
+          {activeTab === 'team' && (
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full" />
+          )}
+        </button>
       </div>
 
       {activeTab === 'channels' ? (
@@ -651,6 +1055,8 @@ export default function SettingsPage() {
         <ServicesTab />
       ) : activeTab === 'booking' ? (
         <BookingTab />
+      ) : activeTab === 'team' ? (
+        <TeamTab />
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
