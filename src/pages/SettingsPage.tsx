@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Save, CheckCircle2, History, Upload, Sparkles, X, Plus, Trash2, MessageSquare, Mail, Phone } from 'lucide-react';
+import { Save, CheckCircle2, History, Upload, Sparkles, X, Plus, Trash2, MessageSquare, Mail, Phone, CalendarDays, Edit2 } from 'lucide-react';
 import { cn, formatRelativeTime } from '../lib/utils';
 import { api } from '../lib/api';
 import { useApi } from '../hooks/useApi';
@@ -161,12 +161,122 @@ function ChannelsTab() {
   );
 }
 
+// ─── Services Tab ─────────────────────────────────────────────────────────────
+function ServicesTab() {
+  const { activeBusinessId } = useBusiness();
+  const { data: services, refetch } = useApi(() => api.getServices(), [activeBusinessId]);
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState({ name: '', duration_minutes: 60, price: '' });
+  const [saving, setSaving] = useState(false);
+
+  function resetForm() { setForm({ name: '', duration_minutes: 60, price: '' }); setAdding(false); setEditingId(null); }
+
+  async function handleSave() {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    try {
+      const data = { name: form.name.trim(), duration_minutes: form.duration_minutes, price: form.price ? Number(form.price) : undefined };
+      if (editingId) {
+        await api.updateService(editingId, data);
+      } else {
+        await api.createService(data);
+      }
+      resetForm();
+      refetch();
+    } catch (err: any) { alert('Error: ' + (err.message || 'Intenta de nuevo')); }
+    finally { setSaving(false); }
+  }
+
+  async function handleToggle(svc: any) {
+    await api.updateService(svc.id, { active: !svc.active });
+    refetch();
+  }
+
+  async function handleDelete(id: number) {
+    if (!confirm('¿Eliminar este servicio?')) return;
+    await api.deleteService(id);
+    refetch();
+  }
+
+  function startEdit(svc: any) {
+    setEditingId(svc.id);
+    setForm({ name: svc.name, duration_minutes: svc.duration_minutes, price: svc.price ?? '' });
+    setAdding(true);
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-5">
+      <div>
+        <h3 className="text-sm font-bold text-slate-800 mb-1">Catálogo de Servicios</h3>
+        <p className="text-xs text-slate-400">Define los servicios que ofreces con su duración. El AI usará esto para calcular disponibilidad y detectar conflictos de horario.</p>
+      </div>
+
+      {/* List */}
+      {services && services.length > 0 ? (
+        <div className="space-y-2">
+          {services.map((svc: any) => (
+            <div key={svc.id} className={cn('flex items-center gap-3 px-3 py-2.5 bg-slate-50 rounded-lg border border-slate-100', !svc.active && 'opacity-50')}>
+              <CalendarDays className="w-4 h-4 text-blue-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <span className="text-sm font-medium text-slate-700">{svc.name}</span>
+                <span className="text-xs text-slate-400 ml-2">{svc.duration_minutes} min</span>
+                {svc.price && <span className="text-xs text-slate-400 ml-2">${Number(svc.price).toLocaleString('es-MX')}</span>}
+              </div>
+              <button onClick={() => handleToggle(svc)} title={svc.active ? 'Desactivar' : 'Activar'}
+                className={cn('text-xs px-2 py-0.5 rounded font-medium', svc.active ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-500')}>
+                {svc.active ? 'Activo' : 'Inactivo'}
+              </button>
+              <button onClick={() => startEdit(svc)} className="text-slate-400 hover:text-blue-500 transition-colors"><Edit2 className="w-4 h-4" /></button>
+              <button onClick={() => handleDelete(svc.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4" /></button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-slate-400 py-4 text-center">No hay servicios. Agrega uno para comenzar.</p>
+      )}
+
+      {/* Add / Edit form */}
+      {adding ? (
+        <div className="border border-blue-200 bg-blue-50/40 rounded-lg p-4 space-y-3">
+          <p className="text-xs font-semibold text-slate-700">{editingId ? 'Editar servicio' : 'Nuevo servicio'}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <input type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="Nombre del servicio" autoFocus
+              className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <input type="number" value={form.duration_minutes} min={5} step={5}
+              onChange={(e) => setForm((f) => ({ ...f, duration_minutes: Number(e.target.value) }))}
+              placeholder="Duración (min)"
+              className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <input type="number" value={form.price} step={0.01}
+              onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+              placeholder="Precio (opcional)"
+              className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={resetForm} className="flex-1 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50">Cancelar</button>
+            <button onClick={handleSave} disabled={saving || !form.name.trim()}
+              className="flex-1 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium">
+              {saving ? 'Guardando...' : editingId ? 'Actualizar' : 'Agregar'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => { resetForm(); setAdding(true); }}
+          className="w-full py-2 text-sm border border-dashed border-slate-300 rounded-lg text-slate-500 hover:border-blue-400 hover:text-blue-600 transition-colors flex items-center justify-center gap-1.5">
+          <Plus className="w-4 h-4" /> Agregar Servicio
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Settings Page ──────────────────────────────────────────────────────
 export default function SettingsPage() {
   const { activeBusinessId } = useBusiness();
   const { data: business, loading } = useApi(() => api.getBusiness(), [activeBusinessId]);
   const { data: aiLogs } = useApi(() => api.getAiLogs(), [activeBusinessId]);
-  const [activeTab, setActiveTab] = useState<'general' | 'channels' | 'templates' | 'memory'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'channels' | 'templates' | 'memory' | 'services'>('general');
   const [form, setForm] = useState({
     name: '',
     nicho: 'salon',
@@ -351,6 +461,18 @@ export default function SettingsPage() {
             <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full" />
           )}
         </button>
+        <button
+          onClick={() => setActiveTab('services')}
+          className={cn(
+            'pb-3 text-sm font-medium transition-colors relative',
+            activeTab === 'services' ? 'text-blue-600' : 'text-slate-500 hover:text-slate-700'
+          )}
+        >
+          Servicios
+          {activeTab === 'services' && (
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full" />
+          )}
+        </button>
       </div>
 
       {activeTab === 'channels' ? (
@@ -359,6 +481,8 @@ export default function SettingsPage() {
         <QuickRepliesTab />
       ) : activeTab === 'memory' ? (
         <MemoriesTab />
+      ) : activeTab === 'services' ? (
+        <ServicesTab />
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -13,6 +13,8 @@ import type {
   ActivityEntry,
   SearchResults,
   ReportData,
+  Appointment,
+  Service,
 } from '../types/index';
 import { supabase } from './supabase';
 
@@ -224,6 +226,33 @@ export const api = {
     request<Conversation[]>(`/conversations?contact_id=${contactId}`),
   getContactTasks: (contactId: number) =>
     request<Task[]>(`/tasks?contact_id=${contactId}`),
+
+  // Appointments
+  getAppointments: (from?: string, to?: string) => {
+    const qs = new URLSearchParams();
+    if (from) qs.set('from', from);
+    if (to)   qs.set('to', to);
+    return request<Appointment[]>(`/appointments?${qs}`);
+  },
+  getAvailableSlots: (date: string, duration: number) =>
+    request<string[]>(`/appointments/slots?date=${date}&duration=${duration}`),
+  createAppointment: (data: Partial<Appointment> & { start_time: string }) =>
+    request<Appointment>('/appointments', { method: 'POST', body: JSON.stringify(data) }),
+  updateAppointment: (id: number, data: Partial<Appointment>) =>
+    request<Appointment>(`/appointments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  updateAppointmentStatus: (id: number, status: string) =>
+    request<{ success: boolean }>(`/appointments/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  deleteAppointment: (id: number) =>
+    request<{ success: boolean }>(`/appointments/${id}`, { method: 'DELETE' }),
+
+  // Services
+  getServices: () => request<Service[]>('/services'),
+  createService: (data: { name: string; duration_minutes: number; price?: number }) =>
+    request<Service>('/services', { method: 'POST', body: JSON.stringify(data) }),
+  updateService: (id: number, data: Partial<Service>) =>
+    request<Service>(`/services/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteService: (id: number) =>
+    request<{ success: boolean }>(`/services/${id}`, { method: 'DELETE' }),
 
   // Agentic Memories
   getMemories: () =>

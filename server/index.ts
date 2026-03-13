@@ -24,6 +24,8 @@ import notesRouter from './routes/notes.js';
 import searchRouter from './routes/search.js';
 import reportsRouter from './routes/reports.js';
 import activityRouter from './routes/activity.js';
+import appointmentsRouter from './routes/appointments.js';
+import servicesRouter from './routes/services.js';
 import { errorLogger } from './middleware/errorLogger.js';
 import { requireAuth } from './middleware/auth.js';
 import { initSocket } from './lib/socket.js';
@@ -87,6 +89,8 @@ app.use('/api/notes', requireAuth, notesRouter);
 app.use('/api/search', requireAuth, searchRouter);
 app.use('/api/reports', requireAuth, reportsRouter);
 app.use('/api/activity', requireAuth, activityRouter);
+app.use('/api/appointments', requireAuth, appointmentsRouter);
+app.use('/api/services', requireAuth, servicesRouter);
 
 // Global error handler
 app.use(errorLogger);

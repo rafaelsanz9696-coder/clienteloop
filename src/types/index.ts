@@ -148,6 +148,31 @@ export interface ReportData {
   chartData: { day: string; leads: number }[];
 }
 
+export interface Appointment {
+  id: number;
+  business_id: number;
+  contact_id: number | null;
+  service_id: number | null;
+  title: string;
+  start_time: string;        // ISO 8601
+  end_time: string;          // ISO 8601
+  duration_minutes: number;
+  status: 'confirmed' | 'pending' | 'cancelled' | 'completed';
+  notes: string | null;
+  contact_name?: string;
+  service_name?: string;
+  created_at: string;
+}
+
+export interface Service {
+  id: number;
+  business_id: number;
+  name: string;
+  duration_minutes: number;
+  price: number | null;
+  active: boolean;
+}
+
 export type MemoryType = 'style' | 'faq' | 'pattern' | 'client_insight';
 
 export interface BusinessMemory {

@@ -189,6 +189,35 @@ export async function initDb() {
       );
       CREATE INDEX IF NOT EXISTS idx_activity_log_business_id ON activity_log(business_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_activity_log_contact_id  ON activity_log(contact_id, created_at DESC);
+
+      -- Services catalog: predefined service types with duration per business
+      CREATE TABLE IF NOT EXISTS services (
+        id               SERIAL PRIMARY KEY,
+        business_id      INTEGER NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+        name             TEXT    NOT NULL,
+        duration_minutes INTEGER NOT NULL DEFAULT 60,
+        price            DECIMAL(10,2),
+        active           BOOLEAN DEFAULT true,
+        created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_services_business_id ON services(business_id);
+
+      -- Appointments: time-blocked events with conflict detection
+      CREATE TABLE IF NOT EXISTS appointments (
+        id               SERIAL PRIMARY KEY,
+        business_id      INTEGER NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+        contact_id       INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
+        service_id       INTEGER REFERENCES services(id) ON DELETE SET NULL,
+        title            TEXT    NOT NULL,
+        start_time       TIMESTAMP NOT NULL,
+        end_time         TIMESTAMP NOT NULL,
+        duration_minutes INTEGER NOT NULL DEFAULT 60,
+        status           TEXT    DEFAULT 'confirmed',
+        notes            TEXT,
+        created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_appointments_business_time ON appointments(business_id, start_time);
+      CREATE INDEX IF NOT EXISTS idx_appointments_contact       ON appointments(contact_id);
     `);
     console.log('[DB] PostgreSQL connected and schema initialized.');
   } catch (err) {

@@ -46,6 +46,21 @@ async function seed() {
 
       await db.query(`INSERT INTO quick_replies (business_id, title, content, category) VALUES (1, 'Bienvenida', '¡Hola! 👋 Bienvenido...', 'saludo')`);
       await db.query(`INSERT INTO quick_replies (business_id, title, content, category) VALUES (1, 'Precios mechas', 'Las mechas van desde $1,200...', 'precios')`);
+
+      // Default services for salon
+      const salonServices = [
+        ['Corte de Cabello', 30, 350],
+        ['Tinte Completo', 90, 850],
+        ['Manicure', 60, 220],
+        ['Peinado', 45, 450],
+        ['Tratamiento Capilar', 60, 600],
+      ];
+      for (const [name, dur, price] of salonServices) {
+        await db.query(
+          `INSERT INTO services (business_id, name, duration_minutes, price) VALUES (1, $1, $2, $3)`,
+          [name, dur, price]
+        );
+      }
     }
 
     // ─── Business 2 ────────────────────────────────────────────────────────

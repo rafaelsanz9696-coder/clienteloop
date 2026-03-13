@@ -2,6 +2,7 @@ import db from '../db/database.js';
 import { respondWithNichoAI, extractTaskFromConversation } from './nicho-engine.js';
 import { sendChannelMessage } from '../channels/channel-router.js';
 import { isAgenticPlan, getMemories, storeMemory, formatMemoriesForPrompt } from './agent-memory.js';
+import { buildScheduleContext } from './appointments.js';
 
 /**
  * Strip markdown formatting so AI responses render cleanly in WhatsApp.
@@ -78,6 +79,17 @@ export const AutomationService = {
             }
         }
 
+        // ─── Build schedule context for appointment-aware AI ─────────────────
+        let scheduleContext: string | undefined;
+        const scheduleKeywords = ['cita', 'agendar', 'agenda', 'reserva', 'reservar', 'hora', 'horario', 'disponible', 'appointment'];
+        if (scheduleKeywords.some((kw) => content.toLowerCase().includes(kw))) {
+            try {
+                scheduleContext = await buildScheduleContext(conv.business_id, 3, 60);
+            } catch (schedErr) {
+                console.error('[Automation] Schedule context build failed (non-fatal):', schedErr);
+            }
+        }
+
         try {
             await new Promise(resolve => setTimeout(resolve, 2000));
 
@@ -89,6 +101,7 @@ export const AutomationService = {
                 newMessage: content,
                 memories: memoriesPrompt,
                 clientUsesEmojis: containsEmoji(content), // Mirror client's emoji style
+                scheduleContext,
             });
 
             if (result.response && !result.escalate) {

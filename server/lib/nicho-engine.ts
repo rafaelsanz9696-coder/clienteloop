@@ -72,6 +72,7 @@ export async function respondWithNichoAI(params: {
   tone?: 'corto' | 'formal' | 'persuasivo';
   memories?: string; // Injected by AgentMemory for agentic-plan businesses
   clientUsesEmojis?: boolean; // Adapt emoji usage to client style
+  scheduleContext?: string;   // Available appointment slots for conflict-aware scheduling
 }): Promise<NichoAIResponse> {
   const config = NICHO_CONFIGS[params.nicho];
   const promptTemplate = NICHO_PROMPTS[params.nicho];
@@ -114,6 +115,17 @@ export async function respondWithNichoAI(params: {
   // Inject per-business learned memories (agentic plan only)
   if (params.memories) {
     systemPrompt += params.memories;
+  }
+
+  // Inject available appointment slots so AI can detect conflicts and suggest alternatives
+  if (params.scheduleContext) {
+    systemPrompt += `\n\nDISPONIBILIDAD DE CITAS (próximos días):\n${params.scheduleContext}
+
+REGLA CRÍTICA DE CITAS: Si el cliente pide una cita o pregunta por disponibilidad:
+1. Revisa los horarios libres arriba.
+2. Si la hora solicitada NO aparece en la lista (está ocupada o fuera de horario), NO la confirmes.
+3. Ofrece exactamente 3 alternativas de la lista de horarios disponibles.
+4. Confirma la cita solo con horarios que aparezcan en la lista.`;
   }
 
   systemPrompt += `\n\n${GLOBAL_GUARDRAILS}`;
