@@ -119,6 +119,7 @@ export const api = {
     ),
 
   // Conversations
+  getUnreadCount: () => request<{ count: number }>('/conversations/unread-count'),
   getConversations: (params?: { status?: string }) => {
     const qs = new URLSearchParams({ business_id: String(_activeBusinessId) });
     if (params?.status) qs.set('status', params.status);

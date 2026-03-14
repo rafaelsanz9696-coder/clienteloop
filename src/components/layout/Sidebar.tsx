@@ -19,6 +19,7 @@ import {
 import { cn } from '../../lib/utils';
 import { useBusiness } from '../../contexts/BusinessContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSocket } from '../../contexts/SocketContext';
 
 const navItems = [
   { to: '/app', icon: LayoutDashboard, label: 'Dashboard' },
@@ -234,6 +235,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ open, onClose }: SidebarProps) {
+  const { totalUnread } = useSocket();
   return (
     <>
       {/* Mobile overlay */}
@@ -285,7 +287,12 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
               }
             >
               <Icon className="w-5 h-5 shrink-0" />
-              <span>{label}</span>
+              <span className="flex-1">{label}</span>
+              {to === '/app/inbox' && totalUnread > 0 && (
+                <span className="bg-blue-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1">
+                  {totalUnread > 99 ? '99+' : totalUnread}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>

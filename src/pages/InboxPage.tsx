@@ -220,7 +220,7 @@ function ConversationThread({
     refetch: refetchMessages,
   } = useApi(() => api.getMessages(conversationId), [conversationId]);
   const { data: quickReplies } = useApi(() => api.getQuickReplies(), []);
-  const { socket } = useSocket();
+  const { socket, refetchUnread } = useSocket();
 
   // Handle incoming websocket messages for this specific conversation thread
   useEffect(() => {
@@ -243,10 +243,12 @@ function ConversationThread({
   }, [socket, conversationId, refetchMessages]);
 
   useEffect(() => {
-    api.markConversationRead(conversationId).catch(() => {
+    api.markConversationRead(conversationId).then(() => {
+      refetchUnread(); // Refresh global unread badge after marking read
+    }).catch(() => {
       // Non-critical, ignore errors silently
     });
-  }, [conversationId]);
+  }, [conversationId, refetchUnread]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

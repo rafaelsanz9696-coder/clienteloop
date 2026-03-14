@@ -4,6 +4,21 @@ import type { AuthenticatedRequest } from '../middleware/auth.js';
 
 const router = Router();
 
+// GET /api/conversations/unread-count — total unread messages across all conversations
+router.get('/unread-count', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT COALESCE(SUM(unread_count), 0)::int AS count
+       FROM conversations WHERE business_id = $1`,
+      [req.user!.business_id]
+    );
+    res.json({ count: rows[0].count });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'DB Error' });
+  }
+});
+
 // GET /api/conversations?status=open
 router.get('/', async (req: AuthenticatedRequest, res) => {
   try {

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import type { SearchResults } from '../../types/index';
 import { cn, getChannelColor, getChannelLabel, getStageColor, getStageLabel, formatCurrency } from '../../lib/utils';
+import { useSocket } from '../../contexts/SocketContext';
 
 interface TopBarProps {
   title: string;
@@ -18,6 +19,7 @@ export default function TopBar({ title, onMenuClick }: TopBarProps) {
   const searchRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { totalUnread } = useSocket();
 
   const hasResults = results && (
     results.contacts.length > 0 ||
@@ -162,9 +164,17 @@ export default function TopBar({ title, onMenuClick }: TopBarProps) {
 
       {/* Right side */}
       <div className="flex items-center gap-2">
-        <button className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-colors relative">
+        <button
+          onClick={() => navigate('/app/inbox')}
+          className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-colors relative"
+          title={totalUnread > 0 ? `${totalUnread} mensajes sin leer` : 'Inbox'}
+        >
           <Bell className="w-5 h-5" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+          {totalUnread > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] font-bold min-w-[16px] h-[16px] rounded-full flex items-center justify-center px-0.5">
+              {totalUnread > 9 ? '9+' : totalUnread}
+            </span>
+          )}
         </button>
         <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
           <User className="w-5 h-5 text-slate-400" />
