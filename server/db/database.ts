@@ -252,6 +252,11 @@ export async function initDb() {
       CREATE INDEX IF NOT EXISTS idx_broadcasts_business_id          ON broadcasts(business_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_broadcast_recipients_broadcast  ON broadcast_recipients(broadcast_id);
 
+      -- Billing: Stripe subscription tracking
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'inactive';
+
       -- Team members: additional collaborators per business (agents / admins)
       CREATE TABLE IF NOT EXISTS business_members (
         id               SERIAL PRIMARY KEY,
