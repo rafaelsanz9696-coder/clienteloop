@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   MessageSquare,
@@ -16,82 +17,131 @@ import {
   Wrench,
   Truck,
   Monitor,
+  Star,
+  ChevronDown,
+  ChevronUp,
+  Settings,
+  Plug,
+  Sparkles,
 } from 'lucide-react';
 
-// ─── Nichos ─────────────────────────────────────────────────────────────────
+// ─── Data ─────────────────────────────────────────────────────────────────────
 
 const nichos = [
-  { icon: Scissors, name: 'Salon de belleza', desc: 'Citas, servicios, precios' },
-  { icon: Stethoscope, name: 'Clinica', desc: 'Citas medicas, seguros' },
-  { icon: Home, name: 'Inmobiliaria', desc: 'Propiedades, visitas, financiamiento' },
-  { icon: UtensilsCrossed, name: 'Restaurante', desc: 'Menu, reservas, delivery' },
-  { icon: GraduationCap, name: 'Academia', desc: 'Cursos, inscripciones, horarios' },
-  { icon: Wrench, name: 'Taller mecanico', desc: 'Reparaciones, presupuestos' },
-  { icon: Truck, name: 'Mensajeria', desc: 'Envios, rastreo, tarifas' },
-  { icon: Monitor, name: 'Agencia digital', desc: 'Servicios, portafolio, cotizaciones' },
+  { icon: Scissors,       name: 'Salon de belleza',  desc: 'Citas, servicios, precios' },
+  { icon: Stethoscope,    name: 'Clinica',            desc: 'Citas medicas, seguros' },
+  { icon: Home,           name: 'Inmobiliaria',       desc: 'Propiedades, visitas, financiamiento' },
+  { icon: UtensilsCrossed,name: 'Restaurante',        desc: 'Menu, reservas, delivery' },
+  { icon: GraduationCap,  name: 'Academia',           desc: 'Cursos, inscripciones, horarios' },
+  { icon: Wrench,         name: 'Taller mecanico',    desc: 'Reparaciones, presupuestos' },
+  { icon: Truck,          name: 'Mensajeria',         desc: 'Envios, rastreo, tarifas' },
+  { icon: Monitor,        name: 'Agencia digital',    desc: 'Servicios, portafolio, cotizaciones' },
 ];
 
 const features = [
+  { icon: MessageSquare, title: 'Inbox unificado',      desc: 'WhatsApp, Instagram y email en una sola bandeja. Nunca mas pierdas un mensaje.' },
+  { icon: Users,         title: 'CRM inteligente',      desc: 'Perfil de cada cliente con historial completo, notas, etiquetas y etapa en el pipeline.' },
+  { icon: Bot,           title: 'IA por industria',     desc: 'Respuestas automaticas que entienden tu negocio. No es una IA generica, es tu asistente.' },
+  { icon: BarChart3,     title: 'Pipeline de ventas',   desc: 'Visualiza cada oportunidad desde el primer contacto hasta el cierre.' },
+  { icon: Send,          title: 'Respuestas rapidas',   desc: 'Plantillas predefinidas por categoria. Un clic y respondes en segundos.' },
+  { icon: Zap,           title: 'Automatizaciones',     desc: 'Auto-respuestas, recordatorios de citas y escalamiento inteligente.' },
+];
+
+const testimonials = [
   {
-    icon: MessageSquare,
-    title: 'Inbox unificado',
-    desc: 'WhatsApp, Instagram y email en una sola bandeja. Nunca mas pierdas un mensaje.',
+    name: 'Maria Rodriguez',
+    role: 'Dueña, Salon Glow',
+    location: 'Santo Domingo, RD',
+    rating: 5,
+    text: 'Antes perdia citas porque no podia contestar WhatsApp mientras trabajaba. Ahora la IA responde, agenda y hasta manda recordatorios sola. Mis no-shows bajaron a casi cero.',
+    avatar: 'MR',
+    color: 'from-pink-500 to-rose-500',
   },
   {
-    icon: Users,
-    title: 'CRM inteligente',
-    desc: 'Perfil de cada cliente con historial completo, notas, etiquetas y etapa en el pipeline.',
+    name: 'Carlos Mendez',
+    role: 'Director, Clinica Bienestar',
+    location: 'Bogota, CO',
+    rating: 5,
+    text: 'Teniamos 3 personas contestando WhatsApp y aun asi se nos iban mensajes. ClienteLoop unificó todo y la IA maneja el 70% de las consultas. Ese equipo ahora hace otras cosas.',
+    avatar: 'CM',
+    color: 'from-blue-500 to-cyan-500',
   },
   {
-    icon: Bot,
-    title: 'IA por industria',
-    desc: 'Respuestas automaticas que entienden tu negocio. No es una IA generica, es tu asistente.',
-  },
-  {
-    icon: BarChart3,
-    title: 'Pipeline de ventas',
-    desc: 'Visualiza cada oportunidad desde el primer contacto hasta el cierre.',
-  },
-  {
-    icon: Send,
-    title: 'Respuestas rapidas',
-    desc: 'Plantillas predefinidas por categoria. Un clic y respondes en segundos.',
-  },
-  {
-    icon: Zap,
-    title: 'Automatizaciones',
-    desc: 'Auto-respuestas, seguimiento programado y escalamiento inteligente.',
+    name: 'Luisa Jimenez',
+    role: 'Agente, Propiedades Premium',
+    location: 'Ciudad de Mexico, MX',
+    rating: 5,
+    text: 'En inmobiliaria el seguimiento lo es todo. Antes se me olvidaban prospectos. Ahora el CRM me recuerda, la IA precalifica y yo solo cierro. Cerré 3 propiedades este mes.',
+    avatar: 'LJ',
+    color: 'from-emerald-500 to-teal-500',
   },
 ];
 
-// ─── Components ─────────────────────────────────────────────────────────────
+const faqs = [
+  {
+    q: '¿Necesito saber de tecnología para configurarlo?',
+    a: 'No. El asistente de configuración de IA te guía en una conversación de 2 minutos. Le cuentas sobre tu negocio y él se encarga del resto. Muchos usuarios están operando en menos de 10 minutos.',
+  },
+  {
+    q: '¿Cómo se conecta con mi WhatsApp?',
+    a: 'Usamos la API oficial de WhatsApp Business de Meta. Necesitas un número de teléfono dedicado para el negocio (no el personal). Te ayudamos con el proceso de verificación incluido en el onboarding.',
+  },
+  {
+    q: '¿La IA puede cometer errores y arruinar una venta?',
+    a: 'La IA sugiere respuestas pero puedes configurarla para auto-responder solo en horarios específicos o solo en ciertos temas. Siempre puedes intervenir manualmente. Además, aprende de tus correcciones.',
+  },
+  {
+    q: '¿Qué pasa si necesito más de 3 agentes?',
+    a: 'Puedes agregar agentes adicionales por $19/mes cada uno. Sin límite máximo. Si tienes un equipo grande, contáctanos para un plan personalizado.',
+  },
+  {
+    q: '¿Puedo cancelar en cualquier momento?',
+    a: 'Sí. Sin penalidades, sin contratos anuales obligatorios. Cancelas desde la configuración de tu cuenta y no se te cobra más. Tus datos se exportan antes de cerrar.',
+  },
+];
+
+const steps = [
+  {
+    step: '01',
+    icon: Settings,
+    title: 'Configura en 10 minutos',
+    desc: 'El asistente de IA te hace preguntas sobre tu negocio y genera tu perfil automaticamente. Sin formularios tediosos.',
+  },
+  {
+    step: '02',
+    icon: Plug,
+    title: 'Conecta tus canales',
+    desc: 'WhatsApp Business, Instagram y email se integran en minutos con la API oficial de Meta.',
+  },
+  {
+    step: '03',
+    icon: Sparkles,
+    title: 'La IA trabaja por ti',
+    desc: 'Desde el primer mensaje, tu asistente responde, agenda y da seguimiento — con el tono y contexto de tu negocio.',
+  },
+];
+
+// ─── Components ───────────────────────────────────────────────────────────────
 
 function Navbar() {
   return (
     <nav className="fixed top-0 w-full z-50 bg-slate-950/80 backdrop-blur-lg border-b border-slate-800/50">
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2.5">
-          <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center font-bold text-white text-sm">
-            CL
-          </div>
+          <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center font-bold text-white text-sm">CL</div>
           <span className="text-lg font-bold text-white tracking-tight">ClienteLoop</span>
         </Link>
         <div className="hidden md:flex items-center gap-8 text-sm text-slate-400">
-          <a href="#features" className="hover:text-white transition-colors">Funciones</a>
-          <a href="#nichos" className="hover:text-white transition-colors">Industrias</a>
-          <a href="#pricing" className="hover:text-white transition-colors">Precios</a>
+          <a href="#features"  className="hover:text-white transition-colors">Funciones</a>
+          <a href="#nichos"    className="hover:text-white transition-colors">Industrias</a>
+          <a href="#pricing"   className="hover:text-white transition-colors">Precios</a>
+          <a href="#faq"       className="hover:text-white transition-colors">FAQ</a>
         </div>
         <div className="flex items-center gap-3">
-          <Link
-            to="/login"
-            className="text-sm text-slate-300 hover:text-white transition-colors"
-          >
+          <Link to="/login" className="text-sm text-slate-300 hover:text-white transition-colors">
             Iniciar sesion
           </Link>
-          <Link
-            to="/login?tab=signup"
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors"
-          >
+          <Link to="/login?tab=signup" className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-xl transition-colors">
             Empieza gratis
           </Link>
         </div>
@@ -132,7 +182,7 @@ function Hero() {
           </a>
         </div>
         <p className="mt-5 text-xs text-slate-600">
-          Prueba gratis por 14 días · Setup en 10 minutos · Cancela cuando quieras
+          Prueba gratis por 14 días · Setup en 10 minutos · No se requiere tarjeta
         </p>
       </div>
     </section>
@@ -143,18 +193,16 @@ function ProblemSection() {
   return (
     <section className="py-20 px-6 bg-slate-900/50">
       <div className="max-w-4xl mx-auto text-center">
-        <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">
-          Tu problema es real
-        </h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">Tu problema es real</h2>
         <p className="text-slate-400 max-w-2xl mx-auto mb-12 leading-relaxed">
           Recibes mensajes en WhatsApp, Instagram, Facebook y email. Cada app es un silo.
           Pierdes mensajes, olvidas dar seguimiento, y tus clientes se van con la competencia.
         </p>
         <div className="grid sm:grid-cols-3 gap-6">
           {[
-            { num: '67%', label: 'de clientes no reciben seguimiento' },
-            { num: '3.5x', label: 'mas ventas con respuesta en < 5 min' },
-            { num: '45 min', label: 'promedio diario perdido cambiando apps' },
+            { num: '67%',   label: 'de clientes no reciben seguimiento' },
+            { num: '3.5x',  label: 'mas ventas con respuesta en menos de 5 min' },
+            { num: '45 min',label: 'promedio diario perdido cambiando apps' },
           ].map(({ num, label }) => (
             <div key={num} className="p-6 bg-slate-800/50 rounded-2xl border border-slate-700/50">
               <div className="text-3xl font-bold text-blue-400 mb-2">{num}</div>
@@ -167,9 +215,42 @@ function ProblemSection() {
   );
 }
 
+function HowItWorks() {
+  return (
+    <section className="py-20 px-6">
+      <div className="max-w-5xl mx-auto">
+        <div className="text-center mb-14">
+          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">Funciona en 3 pasos</h2>
+          <p className="text-slate-400 max-w-xl mx-auto">
+            Sin instalaciones complicadas. Sin equipo tecnico. Operando desde el dia uno.
+          </p>
+        </div>
+        <div className="grid md:grid-cols-3 gap-8 relative">
+          {/* Connecting line (desktop only) */}
+          <div className="hidden md:block absolute top-10 left-[16.5%] right-[16.5%] h-px bg-gradient-to-r from-transparent via-blue-500/30 to-transparent" />
+          {steps.map(({ step, icon: Icon, title, desc }) => (
+            <div key={step} className="relative flex flex-col items-center text-center">
+              <div className="relative mb-6">
+                <div className="w-20 h-20 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center">
+                  <Icon className="w-8 h-8 text-blue-400" />
+                </div>
+                <span className="absolute -top-2 -right-2 w-6 h-6 bg-blue-600 rounded-full text-[10px] font-bold text-white flex items-center justify-center">
+                  {step.slice(1)}
+                </span>
+              </div>
+              <h3 className="text-white font-bold mb-2">{title}</h3>
+              <p className="text-sm text-slate-400 leading-relaxed">{desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Features() {
   return (
-    <section id="features" className="py-20 px-6">
+    <section id="features" className="py-20 px-6 bg-slate-900/50">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-14">
           <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">
@@ -181,10 +262,7 @@ function Features() {
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {features.map(({ icon: Icon, title, desc }) => (
-            <div
-              key={title}
-              className="p-6 bg-slate-900/60 rounded-2xl border border-slate-800 hover:border-slate-700 transition-colors"
-            >
+            <div key={title} className="p-6 bg-slate-900/60 rounded-2xl border border-slate-800 hover:border-slate-700 transition-colors">
               <div className="w-11 h-11 bg-blue-500/15 rounded-xl flex items-center justify-center mb-4">
                 <Icon className="w-5 h-5 text-blue-400" />
               </div>
@@ -200,7 +278,7 @@ function Features() {
 
 function NichosSection() {
   return (
-    <section id="nichos" className="py-20 px-6 bg-slate-900/50">
+    <section id="nichos" className="py-20 px-6">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-14">
           <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">
@@ -213,10 +291,7 @@ function NichosSection() {
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {nichos.map(({ icon: Icon, name, desc }) => (
-            <div
-              key={name}
-              className="p-5 bg-slate-800/40 rounded-xl border border-slate-700/50 hover:border-blue-500/30 transition-colors group"
-            >
+            <div key={name} className="p-5 bg-slate-800/40 rounded-xl border border-slate-700/50 hover:border-blue-500/30 transition-colors group">
               <div className="w-10 h-10 bg-blue-500/10 group-hover:bg-blue-500/20 rounded-lg flex items-center justify-center mb-3 transition-colors">
                 <Icon className="w-5 h-5 text-blue-400" />
               </div>
@@ -230,14 +305,55 @@ function NichosSection() {
   );
 }
 
+function Testimonials() {
+  return (
+    <section className="py-20 px-6 bg-slate-900/50">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-14">
+          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">
+            Negocios que ya cerraron el bucle
+          </h2>
+          <p className="text-slate-400 max-w-xl mx-auto">
+            De salon de belleza a inmobiliaria. El patron es siempre el mismo: mas respuestas, mas ventas.
+          </p>
+        </div>
+        <div className="grid md:grid-cols-3 gap-6">
+          {testimonials.map(({ name, role, location, rating, text, avatar, color }) => (
+            <div key={name} className="p-6 bg-slate-900/60 rounded-2xl border border-slate-800 flex flex-col gap-4">
+              {/* Stars */}
+              <div className="flex gap-0.5">
+                {Array.from({ length: rating }).map((_, i) => (
+                  <Star key={i} className="w-4 h-4 text-amber-400 fill-amber-400" />
+                ))}
+              </div>
+              {/* Quote */}
+              <p className="text-sm text-slate-300 leading-relaxed flex-1">
+                &ldquo;{text}&rdquo;
+              </p>
+              {/* Author */}
+              <div className="flex items-center gap-3 pt-2 border-t border-slate-800">
+                <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${color} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                  {avatar}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white">{name}</p>
+                  <p className="text-xs text-slate-500">{role} · {location}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Pricing() {
   return (
     <section id="pricing" className="py-20 px-6">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-14">
-          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">
-            Un solo plan. Todo incluido.
-          </h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">Un solo plan. Todo incluido.</h2>
           <p className="text-slate-400">
             Reemplaza 4 herramientas diferentes y ahorra cientos de dolares al mes.
           </p>
@@ -246,14 +362,17 @@ function Pricing() {
           {/* ClienteLoop */}
           <div className="p-8 bg-gradient-to-b from-blue-950/40 to-slate-900 rounded-2xl border border-blue-500/30 relative shadow-2xl shadow-blue-900/20">
             <div className="absolute -top-3 left-6 px-3 py-1 bg-blue-600 rounded-full text-xs font-semibold text-white">
-              Prueba 14 días gratis
+              Prueba 14 dias gratis
             </div>
             <h3 className="text-white font-bold text-xl mb-2">ClienteLoop Pro</h3>
-            <div className="flex items-baseline gap-1 mb-4">
-              <span className="text-5xl font-black text-white">$100</span>
+            <div className="flex items-baseline gap-1 mb-1">
+              <span className="text-5xl font-black text-white">$99</span>
               <span className="text-slate-400 text-sm font-medium">USD/mes</span>
             </div>
-            <p className="text-sm text-blue-300 font-medium mb-6 backdrop-blur-sm bg-blue-500/10 px-3 py-2 rounded-lg border border-blue-500/20">
+            <p className="text-xs text-slate-500 mb-4">
+              Incluye 3 agentes · agentes extra a <span className="text-blue-400 font-semibold">$19/mes c/u</span>
+            </p>
+            <p className="text-sm text-blue-300 font-medium mb-6 bg-blue-500/10 px-3 py-2 rounded-lg border border-blue-500/20">
               Ideal para negocios que venden por WhatsApp
             </p>
             <ul className="space-y-4 mb-8">
@@ -261,10 +380,10 @@ function Pricing() {
                 'Inbox unificado (WA + IG + Email)',
                 'CRM completo con pipeline visual',
                 'Agente de IA especializado en tu nicho',
-                'Memoria Agéntica (aprende de tu negocio)',
+                'Memoria Agentica (aprende de tu negocio)',
                 'Insights y sugerencias proactivas',
-                'Hasta 3 agentes humanos',
-                'Soporte directo en español',
+                'Hasta 3 agentes humanos incluidos',
+                'Soporte directo en espanol',
               ].map((item) => (
                 <li key={item} className="flex items-start gap-3 text-sm text-slate-300">
                   <Check className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
@@ -274,10 +393,11 @@ function Pricing() {
             </ul>
             <Link
               to="/login?tab=signup"
-              className="block flex items-center justify-center gap-2 w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-sm text-center transition-all shadow-lg shadow-blue-900/40"
+              className="flex items-center justify-center gap-2 w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-sm text-center transition-all shadow-lg shadow-blue-900/40"
             >
               Comenzar prueba gratis <ArrowRight className="w-4 h-4" />
             </Link>
+            <p className="text-center text-xs text-slate-600 mt-3">No se requiere tarjeta de credito</p>
           </div>
 
           {/* Competencia */}
@@ -288,20 +408,24 @@ function Pricing() {
               <span className="text-slate-600 text-sm font-medium">USD/mes</span>
             </div>
             <p className="text-sm text-slate-500 font-medium mb-6 px-3 py-2">
-              Fragmentado y difícil de mantener
+              Fragmentado y dificil de mantener
             </p>
             <ul className="space-y-4 mb-8 flex-1">
               {[
                 'Inbox multicanal (Ej: Manychat $50/m)',
                 'CRM de ventas (Ej: HubSpot $50/m)',
-                'Chatbot Genérico (Ej: Chatnode $100/m)',
+                'Chatbot Generico (Ej: Chatnode $100/m)',
                 '❌ No entiende tu industria',
-                '❌ Sin memoria agéntica',
+                '❌ Sin memoria agentica',
                 '❌ Integraciones complejas (Zapier $50/m)',
               ].map((item, i) => (
                 <li key={i} className="flex items-start gap-3 text-sm text-slate-500">
-                  <div className="mt-0.5 shrink-0">{item.startsWith('❌') ? '' : <Check className="w-5 h-5 text-slate-600" />}</div>
-                  <span className={item.startsWith('❌') ? 'text-slate-600' : ''}>{item.replace('❌ ', '')}</span>
+                  <div className="mt-0.5 shrink-0">
+                    {!item.startsWith('❌') && <Check className="w-5 h-5 text-slate-600" />}
+                  </div>
+                  <span className={item.startsWith('❌') ? 'text-slate-600 pl-8' : ''}>
+                    {item.startsWith('❌') ? item.replace('❌ ', '') : item}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -312,9 +436,44 @@ function Pricing() {
   );
 }
 
+function FAQ() {
+  const [open, setOpen] = useState<number | null>(null);
+  return (
+    <section id="faq" className="py-20 px-6 bg-slate-900/50">
+      <div className="max-w-2xl mx-auto">
+        <div className="text-center mb-14">
+          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">Preguntas frecuentes</h2>
+          <p className="text-slate-400">Todo lo que necesitas saber antes de empezar.</p>
+        </div>
+        <div className="space-y-3">
+          {faqs.map(({ q, a }, i) => (
+            <div key={i} className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden">
+              <button
+                onClick={() => setOpen(open === i ? null : i)}
+                className="w-full flex items-center justify-between px-5 py-4 text-left text-sm font-medium text-white hover:text-blue-300 transition-colors"
+              >
+                <span>{q}</span>
+                {open === i
+                  ? <ChevronUp className="w-4 h-4 text-blue-400 shrink-0 ml-3" />
+                  : <ChevronDown className="w-4 h-4 text-slate-500 shrink-0 ml-3" />
+                }
+              </button>
+              {open === i && (
+                <div className="px-5 pb-5">
+                  <p className="text-sm text-slate-400 leading-relaxed">{a}</p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function FinalCTA() {
   return (
-    <section className="py-20 px-6 bg-slate-900/50">
+    <section className="py-20 px-6">
       <div className="max-w-2xl mx-auto text-center">
         <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">
           Deja de perder clientes hoy
@@ -329,6 +488,7 @@ function FinalCTA() {
         >
           Crear mi cuenta gratis <ArrowRight className="w-4 h-4" />
         </Link>
+        <p className="mt-4 text-xs text-slate-600">14 dias gratis · Sin tarjeta · Cancela cuando quieras</p>
       </div>
     </section>
   );
@@ -339,14 +499,10 @@ function Footer() {
     <footer className="py-10 px-6 border-t border-slate-800">
       <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-white text-xs">
-            CL
-          </div>
+          <div className="w-7 h-7 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-white text-xs">CL</div>
           <span className="text-sm font-semibold text-white">ClienteLoop</span>
         </div>
-        <p className="text-xs text-slate-600">
-          &copy; 2026 ClienteLoop. Hecho para negocios hispanohablantes.
-        </p>
+        <p className="text-xs text-slate-600">&copy; 2026 ClienteLoop. Hecho para negocios hispanohablantes.</p>
         <div className="flex items-center gap-6 text-xs text-slate-500">
           <a href="#" className="hover:text-slate-300 transition-colors">Terminos</a>
           <a href="#" className="hover:text-slate-300 transition-colors">Privacidad</a>
@@ -357,7 +513,7 @@ function Footer() {
   );
 }
 
-// ─── Main Landing Page ──────────────────────────────────────────────────────
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function LandingPage() {
   return (
@@ -365,9 +521,12 @@ export default function LandingPage() {
       <Navbar />
       <Hero />
       <ProblemSection />
+      <HowItWorks />
       <Features />
       <NichosSection />
+      <Testimonials />
       <Pricing />
+      <FAQ />
       <FinalCTA />
       <Footer />
     </div>
