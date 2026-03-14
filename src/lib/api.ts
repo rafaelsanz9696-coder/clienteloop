@@ -138,6 +138,13 @@ export const api = {
     request<{ success: boolean; intent_label: string | null }>(`/conversations/${id}/intent`, { method: 'PATCH', body: JSON.stringify({ intent_label }) }),
   detectConversationIntent: (id: number) =>
     request<{ intent_label: string | null }>(`/conversations/${id}/detect-intent`, { method: 'POST' }),
+  getFollowUpConversations: (hours = 24) =>
+    request<Conversation[]>(`/conversations/follow-up?hours=${hours}`),
+  generateFollowupMessage: (conversation_id: number) =>
+    request<{ suggestion: string; hoursSilent: number; contact_name: string }>('/ai/generate-followup', {
+      method: 'POST',
+      body: JSON.stringify({ conversation_id }),
+    }),
 
   // Messages
   getMessages: (conversationId: number) =>

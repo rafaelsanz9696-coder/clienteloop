@@ -193,4 +193,73 @@ Responde SOLO con el perfil formateado usando las 5 secciones indicadas. Sin exp
   }
 });
 
+// POST /api/ai/generate-followup
+// Generates a personalized follow-up message for a silent lead
+router.post('/generate-followup', async (req, res) => {
+  try {
+    const { conversation_id } = req.body;
+    if (!conversation_id) return res.status(400).json({ error: 'conversation_id required' });
+
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured' });
+    }
+
+    // Load conversation + business context
+    const { rows: convRows } = await db.query(`
+      SELECT c.*, ct.name as contact_name,
+             b.name as business_name, b.nicho, b.ai_context
+      FROM conversations c
+      JOIN contacts ct ON ct.id = c.contact_id
+      JOIN businesses b ON b.id = c.business_id
+      WHERE c.id = $1
+    `, [conversation_id]);
+
+    if (convRows.length === 0) return res.status(404).json({ error: 'Conversation not found' });
+
+    const conv = convRows[0];
+
+    // Last 10 messages for context
+    const { rows: msgRows } = await db.query(
+      `SELECT sender, content FROM messages
+       WHERE conversation_id = $1 ORDER BY created_at ASC`,
+      [conversation_id]
+    );
+
+    const transcript = msgRows
+      .slice(-10)
+      .map((m: any) => `${m.sender === 'client' ? conv.contact_name : conv.business_name}: ${m.content}`)
+      .join('\n');
+
+    const hoursSilent = Math.floor(
+      (Date.now() - new Date(conv.last_message_at).getTime()) / (1000 * 60 * 60)
+    );
+    const daysSilent = hoursSilent >= 24 ? `${Math.floor(hoursSilent / 24)} día(s)` : `${hoursSilent} hora(s)`;
+
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 250,
+      temperature: 0.7,
+      system: `Eres el asistente de "${conv.business_name}" (${conv.nicho || 'negocio'}).
+${conv.ai_context ? `Contexto del negocio:\n${conv.ai_context}\n` : ''}
+Genera UN mensaje de seguimiento natural para retomar contacto con ${conv.contact_name}, quien lleva ${daysSilent} sin responder.
+
+Reglas estrictas:
+- Máximo 2-3 líneas, conversacional
+- Tono cálido, NO desesperado ni presionante
+- Menciona algo concreto de la conversación si es posible
+- Usa su nombre (${conv.contact_name})
+- Incluye una pregunta abierta al final
+- Solo el mensaje listo para enviar, sin comillas, sin explicaciones`,
+      messages: [{ role: 'user', content: `Historial:\n${transcript}` }],
+    });
+
+    const suggestion = (response.content.find((c) => c.type === 'text') as any)?.text?.trim() || '';
+    res.json({ suggestion, hoursSilent, contact_name: conv.contact_name });
+  } catch (err: any) {
+    console.error('[generate-followup]', err);
+    res.status(500).json({ error: err.message || 'Failed to generate follow-up' });
+  }
+});
+
 export default router;

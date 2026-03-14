@@ -5,6 +5,36 @@ import type { AuthenticatedRequest } from '../middleware/auth.js';
 
 const router = Router();
 
+// GET /api/conversations/follow-up — open conversations silent for 24h+ where last msg was from agent
+router.get('/follow-up', async (req: AuthenticatedRequest, res) => {
+  try {
+    const bid = req.user!.business_id;
+    const hours = Math.max(1, Math.min(Number(req.query.hours) || 24, 720));
+
+    const { rows } = await db.query(
+      `SELECT sub.*, ct.name as contact_name, ct.phone as contact_phone, ct.channel as contact_channel
+       FROM (
+         SELECT c.*,
+           EXTRACT(EPOCH FROM (NOW() - c.last_message_at)) / 3600 AS hours_since_last,
+           (SELECT sender FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_sender
+         FROM conversations c
+         WHERE c.business_id = $1
+           AND c.status = 'open'
+           AND c.last_message_at < NOW() - ($2 || ' hours')::INTERVAL
+       ) sub
+       JOIN contacts ct ON ct.id = sub.contact_id
+       WHERE sub.last_sender = 'agent'
+       ORDER BY sub.last_message_at ASC
+       LIMIT 50`,
+      [bid, hours]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[follow-up]', err);
+    res.status(500).json({ error: 'DB Error' });
+  }
+});
+
 // GET /api/conversations/unread-count — total unread messages across all conversations
 router.get('/unread-count', async (req: AuthenticatedRequest, res) => {
   try {

@@ -279,18 +279,25 @@ function ConversationList({
           />
         </div>
         <div className="flex gap-1 flex-wrap">
-          {['all', 'open', 'resolved'].map((f) => (
+          {[
+            { key: 'all',      label: 'Todos' },
+            { key: 'open',     label: 'Abiertos' },
+            { key: 'resolved', label: 'Resueltos' },
+            { key: 'followup', label: '🕐 Seguimiento' },
+          ].map(({ key, label }) => (
             <button
-              key={f}
-              onClick={() => onFilterChange(f)}
+              key={key}
+              onClick={() => { onFilterChange(key); onIntentFilterChange(''); }}
               className={cn(
                 'px-3 py-1 text-xs font-medium rounded-full transition-colors',
-                filter === f
-                  ? 'bg-blue-100 text-blue-700'
+                filter === key
+                  ? key === 'followup'
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-blue-100 text-blue-700'
                   : 'text-slate-500 hover:bg-slate-100'
               )}
             >
-              {f === 'all' ? 'Todos' : f === 'open' ? 'Abiertos' : 'Resueltos'}
+              {label}
             </button>
           ))}
         </div>
@@ -366,11 +373,21 @@ function ConversationList({
                   </div>
                   <p className="text-xs text-slate-500 truncate">{conv.last_message}</p>
                 </div>
-                {conv.unread_count > 0 && (
-                  <span className="bg-blue-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shrink-0">
-                    {conv.unread_count}
-                  </span>
-                )}
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  {conv.unread_count > 0 && (
+                    <span className="bg-blue-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                      {conv.unread_count}
+                    </span>
+                  )}
+                  {filter === 'followup' && (conv as any).hours_since_last != null && (
+                    <span className="flex items-center gap-0.5 text-[10px] font-medium text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
+                      <Clock className="w-2.5 h-2.5" />
+                      {(conv as any).hours_since_last >= 24
+                        ? `${Math.floor((conv as any).hours_since_last / 24)}d`
+                        : `${Math.floor((conv as any).hours_since_last)}h`}
+                    </span>
+                  )}
+                </div>
               </div>
             </button>
           ))
@@ -440,6 +457,7 @@ function ConversationThread({
   const [aiEscalate, setAiEscalate] = useState(false);
   const [taskExtracting, setTaskExtracting] = useState(false);
   const [intentLabel, setIntentLabel] = useState<string | null | undefined>(undefined);
+  const [followupGenerating, setFollowupGenerating] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: conversation } = useApi(
@@ -558,6 +576,22 @@ function ConversationThread({
     setAiEscalate(false);
   }
 
+  async function handleGenerateFollowup() {
+    if (followupGenerating) return;
+    setFollowupGenerating(true);
+    try {
+      const result = await api.generateFollowupMessage(conversationId);
+      if (result.suggestion) {
+        setMessageText(result.suggestion);
+        setAiSuggestion(null);
+      }
+    } catch (err) {
+      console.error('generate-followup failed:', err);
+    } finally {
+      setFollowupGenerating(false);
+    }
+  }
+
   async function handleExtractTask() {
     if (taskExtracting) return;
     setTaskExtracting(true);
@@ -631,6 +665,20 @@ function ConversationThread({
           currentIntent={intentLabel}
           onIntentChange={setIntentLabel}
         />
+        <button
+          onClick={handleGenerateFollowup}
+          disabled={followupGenerating}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold uppercase tracking-wider transition-colors",
+            followupGenerating
+              ? "bg-amber-50 border-amber-200 text-amber-400 animate-pulse"
+              : "border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100"
+          )}
+          title="Generar mensaje de seguimiento con IA"
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          {followupGenerating ? 'Generando...' : 'Seguimiento IA'}
+        </button>
         <button
           onClick={handleExtractTask}
           disabled={taskExtracting}
@@ -829,9 +877,11 @@ export default function InboxPage() {
 
   const { data: conversations, loading, refetch: refetchConversations } = useApi(
     () =>
-      filter === 'all'
-        ? api.getConversations()
-        : api.getConversations({ status: filter }),
+      filter === 'followup'
+        ? api.getFollowUpConversations()
+        : filter === 'all'
+          ? api.getConversations()
+          : api.getConversations({ status: filter }),
     [filter, activeBusinessId]
   );
 
