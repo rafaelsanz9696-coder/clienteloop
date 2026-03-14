@@ -74,6 +74,51 @@ function IntentBadge({ label, small = false }: { label: string; small?: boolean 
   );
 }
 
+// ─── Nicho-aware intent presets ───────────────────────────────────────────────
+const INTENT_PRESETS: Record<string, string[]> = {
+  salon: [
+    'Reserva cita', 'Corte de cabello', 'Tinte / Color', 'Manicura / Uñas',
+    'Depilación', 'Tratamiento capilar', 'Precio servicio', 'Información general',
+  ],
+  barberia: [
+    'Reserva cita', 'Corte clásico', 'Arreglo de barba', 'Fade / Degradado',
+    'Precio servicio', 'Horario disponible', 'Servicios combo', 'Información general',
+  ],
+  clinica: [
+    'Agendar consulta', 'Resultado de examen', 'Seguimiento paciente', 'Urgencia médica',
+    'Precio consulta', 'Especialista disponible', 'Historia clínica', 'Información general',
+  ],
+  inmobiliaria: [
+    'Comprar propiedad', 'Rentar propiedad', 'Precio / Valuación', 'Visita inmueble',
+    'Documentación requerida', 'Financiamiento', 'Inversión', 'Información general',
+  ],
+  restaurante: [
+    'Reserva mesa', 'Pedido delivery', 'Menú del día', 'Precio platillo',
+    'Evento / Catering', 'Horario apertura', 'Domicilio disponible', 'Información general',
+  ],
+  academia: [
+    'Información curso', 'Inscripción', 'Horarios clase', 'Precio / Beca',
+    'Certificación', 'Duda académica', 'Modalidad online', 'Información general',
+  ],
+  taller: [
+    'Diagnóstico vehículo', 'Cotización reparación', 'Cambio aceite / Filtros', 'Cita taller',
+    'Garantía servicio', 'Recogida a domicilio', 'Refacciones', 'Información general',
+  ],
+  courier: [
+    'Compra Shein', 'Envío local', 'Envío internacional', 'Personal shopper',
+    'Rastrear paquete', 'Cotización envío', 'Problema entrega', 'Información general',
+  ],
+  agencia_ia: [
+    'Cotización proyecto', 'Demo plataforma', 'Integración CRM', 'Automatización',
+    'Soporte técnico', 'Consultoría IA', 'Plan y precios', 'Información general',
+  ],
+};
+
+const DEFAULT_INTENT_PRESETS = [
+  'Consulta precio', 'Reserva / Cita', 'Soporte', 'Compra / Pedido',
+  'Problema / Queja', 'Información general',
+];
+
 // ─── Intent Selector (dropdown for setting intent) ────────────────────────────
 function IntentSelector({
   conversationId,
@@ -84,21 +129,14 @@ function IntentSelector({
   currentIntent: string | null | undefined;
   onIntentChange: (label: string | null) => void;
 }) {
+  const { activeBusiness } = useBusiness();
   const [open, setOpen] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [customInput, setCustomInput] = useState('');
   const [showCustom, setShowCustom] = useState(false);
 
-  const QUICK_LABELS = [
-    'Compra Shein',
-    'Envío local',
-    'Envío internacional',
-    'Personal shopper',
-    'Reserva cita',
-    'Consulta precio',
-    'Problema entrega',
-    'Información general',
-  ];
+  const nicho = activeBusiness?.nicho ?? 'general';
+  const QUICK_LABELS = INTENT_PRESETS[nicho] ?? DEFAULT_INTENT_PRESETS;
 
   async function handleAutoDetect() {
     setDetecting(true);
