@@ -116,4 +116,116 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// GET /api/contacts/export — download all contacts as UTF-8 CSV (BOM for Excel)
+router.get('/export', async (req: AuthenticatedRequest, res) => {
+  try {
+    const bid = req.user!.business_id;
+    const { rows } = await db.query(
+      `SELECT name, phone, email, channel, pipeline_stage, tags, notes, created_at
+       FROM contacts WHERE business_id = $1 ORDER BY name ASC`,
+      [bid]
+    );
+    const esc = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const header = ['Nombre', 'Telefono', 'Email', 'Canal', 'Etapa', 'Etiquetas', 'Notas', 'Creado'].map(esc).join(',');
+    const csvRows = rows.map(c => {
+      const tagList = (() => { try { return (JSON.parse(c.tags) as string[]).join('; '); } catch { return ''; } })();
+      return [
+        c.name, c.phone || '', c.email || '', c.channel,
+        c.pipeline_stage, tagList, (c.notes || '').replace(/\n/g, ' '),
+        new Date(c.created_at).toLocaleDateString('es-MX'),
+      ].map(esc).join(',');
+    });
+    const csv = '\uFEFF' + [header, ...csvRows].join('\r\n');
+    const filename = `contactos_${new Date().toISOString().split('T')[0]}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'DB Error' });
+  }
+});
+
+// POST /api/contacts/import — upsert contacts from CSV text in JSON body
+router.post('/import', async (req: AuthenticatedRequest, res) => {
+  try {
+    const bid = req.user!.business_id;
+    const { csv } = req.body as { csv: string };
+    if (!csv || typeof csv !== 'string') return res.status(400).json({ error: 'CSV content required' });
+
+    function parseCSVLine(line: string): string[] {
+      const cols: string[] = [];
+      let cur = '', inQ = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') { if (inQ && line[i + 1] === '"') { cur += '"'; i++; } else inQ = !inQ; }
+        else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
+        else cur += ch;
+      }
+      cols.push(cur.trim());
+      return cols;
+    }
+
+    const lines = csv.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim().split('\n');
+    if (lines.length < 2) return res.status(400).json({ error: 'CSV necesita encabezado + al menos una fila' });
+
+    const hdrs = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/[^a-z]/g, ''));
+    const find = (names: string[]) => names.reduce<number>((f, n) => f >= 0 ? f : hdrs.indexOf(n), -1);
+    const nameIdx    = find(['nombre', 'name', 'contacto']);
+    const phoneIdx   = find(['telefono', 'phone', 'tel', 'celular']);
+    const emailIdx   = find(['email', 'correo']);
+    const channelIdx = find(['canal', 'channel']);
+    const stageIdx   = find(['etapa', 'stage', 'pipelinestage']);
+    const notesIdx   = find(['notas', 'notes', 'nota']);
+
+    if (nameIdx < 0) return res.status(400).json({ error: 'El CSV necesita una columna "Nombre" o "Name"' });
+
+    let inserted = 0, updated = 0, skipped = 0;
+    const errors: string[] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      try {
+        const cols    = parseCSVLine(lines[i]);
+        const name    = cols[nameIdx]?.trim() || '';
+        const phone   = phoneIdx  >= 0 ? (cols[phoneIdx]?.trim().replace(/\D/g, '') || null) : null;
+        const email   = emailIdx  >= 0 ? (cols[emailIdx]?.trim() || null) : null;
+        const channel = channelIdx >= 0 ? (cols[channelIdx]?.trim() || 'whatsapp') : 'whatsapp';
+        const stage   = stageIdx  >= 0 ? (cols[stageIdx]?.trim()  || 'new')  : 'new';
+        const notes   = notesIdx  >= 0 ? (cols[notesIdx]?.trim()  || '')    : '';
+
+        if (!name) { skipped++; continue; }
+
+        if (phone) {
+          const { rows } = await db.query(
+            `INSERT INTO contacts (business_id, name, phone, email, channel, pipeline_stage, notes)
+             VALUES ($1,$2,$3,$4,$5,$6,$7)
+             ON CONFLICT (phone, business_id) DO UPDATE
+               SET name=$2, email=COALESCE($4, contacts.email), channel=$5,
+                   pipeline_stage=$6, notes=COALESCE(NULLIF($7,''), contacts.notes),
+                   last_contact_at=CURRENT_TIMESTAMP
+             RETURNING (xmax = 0) AS inserted`,
+            [bid, name, phone, email, channel, stage, notes]
+          );
+          if (rows[0]?.inserted) inserted++; else updated++;
+        } else {
+          await db.query(
+            `INSERT INTO contacts (business_id, name, email, channel, pipeline_stage, notes)
+             VALUES ($1,$2,$3,$4,$5,$6)`,
+            [bid, name, email, channel, stage, notes]
+          );
+          inserted++;
+        }
+      } catch (err: any) {
+        errors.push(`Fila ${i + 1}: ${err.message}`);
+      }
+    }
+
+    res.json({ inserted, updated, skipped, errors: errors.slice(0, 10) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'DB Error' });
+  }
+});
+
 export default router;

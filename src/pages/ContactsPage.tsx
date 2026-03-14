@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Search, Plus, Phone, Mail, X, ChevronLeft, MessageSquare,
-  Edit2, Trash2, Download, MoreVertical, StickyNote, Kanban,
-  Clock, Activity, Tag, Send, CheckCircle2, DollarSign,
+  Edit2, Trash2, Download, Upload, MoreVertical, StickyNote, Kanban,
+  Clock, Activity, Tag, Send, CheckCircle2, DollarSign, AlertCircle,
 } from 'lucide-react';
 import { cn, getChannelColor, getChannelLabel, getStageLabel, getStageColor, formatRelativeTime, formatCurrency } from '../lib/utils';
 import { api } from '../lib/api';
@@ -494,6 +494,175 @@ function ContactDetail({ contactId, onClose, onUpdated }: { contactId: number; o
   );
 }
 
+// ─── Import CSV Modal ─────────────────────────────────────────────────────────
+function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
+  const [csvText, setCsvText] = useState<string | null>(null);
+  const [fileName, setFileName] = useState('');
+  const [preview, setPreview] = useState<{ headers: string[]; rows: string[][] } | null>(null);
+  const [totalRows, setTotalRows] = useState(0);
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState<{ inserted: number; updated: number; skipped: number; errors: string[] } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function parseCSVPreview(text: string) {
+    function parseLine(line: string): string[] {
+      const cols: string[] = [];
+      let cur = '', inQ = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') { if (inQ && line[i + 1] === '"') { cur += '"'; i++; } else inQ = !inQ; }
+        else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
+        else cur += ch;
+      }
+      cols.push(cur.trim());
+      return cols;
+    }
+    const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim().split('\n').filter(l => l.trim());
+    if (lines.length < 2) return null;
+    const headers = parseLine(lines[0]);
+    const dataRows = lines.slice(1).map(parseLine);
+    return { headers, rows: dataRows.slice(0, 5), total: dataRows.length };
+  }
+
+  function handleFile(file: File) {
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      setCsvText(text);
+      const parsed = parseCSVPreview(text);
+      if (parsed) {
+        setPreview({ headers: parsed.headers, rows: parsed.rows });
+        setTotalRows(parsed.total);
+      } else {
+        setPreview(null);
+        setTotalRows(0);
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  async function handleImport() {
+    if (!csvText) return;
+    setImporting(true);
+    try {
+      const res = await api.importContactsCSV(csvText);
+      setResult(res);
+      onImported();
+    } catch (err: any) {
+      setResult({ inserted: 0, updated: 0, skipped: 0, errors: [err.message] });
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-5 border-b border-slate-100">
+          <h3 className="font-bold text-slate-800">Importar Contactos (CSV)</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {!result ? (
+            <>
+              {/* File drop zone */}
+              <div
+                onClick={() => fileRef.current?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
+                className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-colors"
+              >
+                <Upload className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                {fileName ? (
+                  <p className="text-sm font-medium text-slate-700">{fileName}</p>
+                ) : (
+                  <>
+                    <p className="text-sm text-slate-500">Arrastra tu CSV aquí o <span className="text-blue-500 font-medium">selecciona un archivo</span></p>
+                    <p className="text-xs text-slate-400 mt-1">Columnas soportadas: Nombre, Telefono, Email, Canal, Etapa, Notas</p>
+                  </>
+                )}
+                <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+              </div>
+
+              {/* Preview table */}
+              {preview && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                    Vista previa — primeras 5 de {totalRows} filas
+                  </p>
+                  <div className="overflow-x-auto rounded-lg border border-slate-200">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200">
+                          {preview.headers.map((h, i) => (
+                            <th key={i} className="px-3 py-2 text-left font-semibold text-slate-600 whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {preview.rows.map((row, ri) => (
+                          <tr key={ri} className="border-b border-slate-50 last:border-0">
+                            {row.map((cell, ci) => (
+                              <td key={ci} className="px-3 py-1.5 text-slate-600 max-w-[120px] truncate">{cell}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                <button onClick={onClose} className="flex-1 py-2.5 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors">
+                  Cancelar
+                </button>
+                <button onClick={handleImport} disabled={!csvText || importing || totalRows === 0}
+                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                  {importing ? 'Importando...' : `Importar ${totalRows} contacto${totalRows !== 1 ? 's' : ''}`}
+                </button>
+              </div>
+            </>
+          ) : (
+            /* Result screen */
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-emerald-50 rounded-xl p-4 text-center">
+                  <p className="text-2xl font-bold text-emerald-600">{result.inserted}</p>
+                  <p className="text-xs text-emerald-700 mt-0.5">Creados</p>
+                </div>
+                <div className="bg-blue-50 rounded-xl p-4 text-center">
+                  <p className="text-2xl font-bold text-blue-600">{result.updated}</p>
+                  <p className="text-xs text-blue-700 mt-0.5">Actualizados</p>
+                </div>
+                <div className="bg-slate-50 rounded-xl p-4 text-center">
+                  <p className="text-2xl font-bold text-slate-500">{result.skipped}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Saltados</p>
+                </div>
+              </div>
+              {result.errors.length > 0 && (
+                <div className="bg-red-50 border border-red-100 rounded-xl p-3">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                    <span className="text-xs font-semibold text-red-700">Errores ({result.errors.length})</span>
+                  </div>
+                  {result.errors.map((e, i) => <p key={i} className="text-xs text-red-600">{e}</p>)}
+                </div>
+              )}
+              <button onClick={onClose} className="w-full py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors">
+                Listo
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Contacts Page ───────────────────────────────────────────────────────
 export default function ContactsPage() {
   const { activeBusinessId } = useBusiness();
@@ -503,6 +672,7 @@ export default function ContactsPage() {
   const [stageFilter, setStageFilter] = useState('');
   const [tagFilter, setTagFilter] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [menuOpen, setMenuOpen] = useState<{ id: number; x: number; y: number } | null>(null);
 
@@ -521,25 +691,18 @@ export default function ContactsPage() {
     new Set((contacts ?? []).flatMap((c) => { try { return JSON.parse(c.tags) as string[]; } catch { return []; } }))
   );
 
-  function handleDownloadCSV() {
-    if (!contacts || contacts.length === 0) return;
-    const headers = ['Nombre', 'Telefono', 'Email', 'Canal', 'Etapa', 'Notas', 'Creado'];
-    const rows = contacts.map(c => [c.name, c.phone || '', c.email || '', c.channel, c.pipeline_stage, (c.notes || '').replace(/\n/g, ' '), new Date(c.created_at).toLocaleDateString('es-MX')]);
-    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    a.download = `contactos_clienteloop_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-  }
-
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
         <h2 className="text-xl font-bold text-slate-800">Contactos</h2>
         <div className="flex gap-2">
-          <button onClick={handleDownloadCSV} disabled={!contacts || contacts.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50">
-            <Download className="w-4 h-4" /> Exportar CSV
+          <button onClick={() => api.exportContactsCSV()}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors">
+            <Download className="w-4 h-4" /> Exportar
+          </button>
+          <button onClick={() => setShowImport(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors">
+            <Upload className="w-4 h-4" /> Importar
           </button>
           <button onClick={() => setShowCreate(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
@@ -664,6 +827,7 @@ export default function ContactsPage() {
       )}
 
       {showCreate && <CreateContactModal onClose={() => setShowCreate(false)} onCreated={refetch} />}
+      {showImport && <ImportCSVModal onClose={() => setShowImport(false)} onImported={refetch} />}
       {editingContact && <EditContactModal contact={editingContact} onClose={() => setEditingContact(null)} onSaved={refetch} />}
       {contactId && <ContactDetail contactId={Number(contactId)} onClose={() => navigate('/app/contacts')} onUpdated={refetch} />}
 

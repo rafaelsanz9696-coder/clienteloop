@@ -61,6 +61,17 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
+async function requestBlob(path: string): Promise<Blob> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  headers['x-business-id'] = String(_activeBusinessId);
+  const res = await fetch(`${BASE_URL}${path}`, { headers });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.blob();
+}
+
 export const api = {
   // Business
   getBusinesses: () => request<Business[]>('/business'),
@@ -93,6 +104,19 @@ export const api = {
     request<{ success: boolean }>(`/contacts/${id}/stage`, { method: 'PATCH', body: JSON.stringify({ stage }) }),
   deleteContact: (id: number) =>
     request<{ success: boolean }>(`/contacts/${id}`, { method: 'DELETE' }),
+  exportContactsCSV: async () => {
+    const blob = await requestBlob('/contacts/export');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `contactos_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+  importContactsCSV: (csv: string) =>
+    request<{ inserted: number; updated: number; skipped: number; errors: string[] }>(
+      '/contacts/import', { method: 'POST', body: JSON.stringify({ csv }) }
+    ),
 
   // Conversations
   getConversations: (params?: { status?: string }) => {
