@@ -5,7 +5,17 @@ import db from '../db/database.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
 
 const router = express.Router();
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+
+// Lazy init — avoids crash when STRIPE_SECRET_KEY is absent in local dev
+let _stripe: Stripe | null = null;
+function getStripe(): Stripe {
+  if (!_stripe) {
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (!key) throw new Error('STRIPE_SECRET_KEY not configured');
+    _stripe = new Stripe(key);
+  }
+  return _stripe;
+}
 
 const PRICE_BASE = process.env.STRIPE_PRICE_BASE || '';
 const PRICE_SEAT = process.env.STRIPE_PRICE_SEAT || '';
@@ -25,7 +35,7 @@ router.post('/create-checkout-session', requireAuth, async (req: AuthenticatedRe
 
     const biz = rows[0];
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       payment_method_types: ['card'],
       customer: biz.stripe_customer_id || undefined,
       line_items: [{ price: PRICE_BASE, quantity: 1 }],
@@ -82,7 +92,7 @@ router.post('/portal', requireAuth, async (req: AuthenticatedRequest, res) => {
       return res.status(400).json({ error: 'No hay suscripción activa.' });
     }
 
-    const session = await stripe.billingPortal.sessions.create({
+    const session = await getStripe().billingPortal.sessions.create({
       customer: customerId,
       return_url: `${FRONTEND_URL}/app/settings?tab=billing`,
     });
@@ -101,7 +111,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(
+    event = getStripe().webhooks.constructEvent(
       req.body,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET || ''
@@ -123,7 +133,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 
         if (businessId && subscriptionId) {
           // Fetch subscription to get status
-          const sub = await stripe.subscriptions.retrieve(subscriptionId);
+          const sub = await getStripe().subscriptions.retrieve(subscriptionId);
           await db.query(
             `UPDATE businesses
              SET stripe_customer_id = $1, stripe_subscription_id = $2,
