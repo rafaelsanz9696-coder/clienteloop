@@ -65,6 +65,7 @@ export interface Conversation {
   contact_channel?: string;
   pipeline_stage?: string;
   contact_notes?: string;
+  intent_label?: string | null;
 }
 
 export interface Message {

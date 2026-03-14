@@ -8,7 +8,9 @@ import {
   Globe,
   Search,
   ChevronLeft,
+  ChevronDown,
   Sparkles,
+  Wand2,
   Zap,
   X,
   User,
@@ -39,6 +41,192 @@ function ChannelIcon({ channel, className }: { channel: string; className?: stri
   }
 }
 
+// ─── Intent helpers ───────────────────────────────────────────────────────────
+const INTENT_COLORS: Record<string, string> = {
+  'compra shein':          'bg-emerald-100 text-emerald-700',
+  'shein':                 'bg-emerald-100 text-emerald-700',
+  'envío local':           'bg-blue-100 text-blue-700',
+  'envio local':           'bg-blue-100 text-blue-700',
+  'envío internacional':   'bg-orange-100 text-orange-700',
+  'envio internacional':   'bg-orange-100 text-orange-700',
+  'personal shopper':      'bg-purple-100 text-purple-700',
+  'reserva cita':          'bg-pink-100 text-pink-700',
+  'consulta precio':       'bg-yellow-100 text-yellow-700',
+  'problema entrega':      'bg-red-100 text-red-700',
+};
+
+function getIntentColor(label: string): string {
+  const key = label.toLowerCase();
+  return INTENT_COLORS[key] || 'bg-slate-100 text-slate-600';
+}
+
+function IntentBadge({ label, small = false }: { label: string; small?: boolean }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded font-medium',
+        small ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-0.5 text-xs',
+        getIntentColor(label),
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
+// ─── Intent Selector (dropdown for setting intent) ────────────────────────────
+function IntentSelector({
+  conversationId,
+  currentIntent,
+  onIntentChange,
+}: {
+  conversationId: number;
+  currentIntent: string | null | undefined;
+  onIntentChange: (label: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+  const [customInput, setCustomInput] = useState('');
+  const [showCustom, setShowCustom] = useState(false);
+
+  const QUICK_LABELS = [
+    'Compra Shein',
+    'Envío local',
+    'Envío internacional',
+    'Personal shopper',
+    'Reserva cita',
+    'Consulta precio',
+    'Problema entrega',
+    'Información general',
+  ];
+
+  async function handleAutoDetect() {
+    setDetecting(true);
+    setOpen(false);
+    try {
+      const result = await api.detectConversationIntent(conversationId);
+      onIntentChange(result.intent_label);
+    } catch (err) {
+      console.error('detect-intent failed:', err);
+    } finally {
+      setDetecting(false);
+    }
+  }
+
+  async function handleSet(label: string | null) {
+    setOpen(false);
+    try {
+      await api.setConversationIntent(conversationId, label);
+      onIntentChange(label);
+    } catch (err) {
+      console.error('set-intent failed:', err);
+    }
+  }
+
+  async function handleCustomSubmit() {
+    if (!customInput.trim()) return;
+    await handleSet(customInput.trim());
+    setCustomInput('');
+    setShowCustom(false);
+  }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        disabled={detecting}
+        className={cn(
+          'flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-medium transition-colors',
+          detecting
+            ? 'animate-pulse bg-purple-50 border-purple-200 text-purple-400'
+            : currentIntent
+              ? cn('border-transparent', getIntentColor(currentIntent))
+              : 'border-slate-200 text-slate-500 hover:bg-slate-50',
+        )}
+        title="Clasificar intención del lead"
+      >
+        {detecting ? (
+          <><Wand2 className="w-3 h-3" /> Detectando...</>
+        ) : currentIntent ? (
+          <>{currentIntent} <ChevronDown className="w-3 h-3 opacity-60" /></>
+        ) : (
+          <><Tag className="w-3 h-3" /> Clasificar lead</>
+        )}
+      </button>
+
+      {open && (
+        <>
+          {/* Backdrop */}
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded-xl shadow-lg w-52 overflow-hidden">
+            {/* AI auto-detect */}
+            <button
+              onClick={handleAutoDetect}
+              className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-purple-600 hover:bg-purple-50 border-b border-slate-100 transition-colors"
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+              Detectar con IA
+            </button>
+
+            {/* Quick labels */}
+            <div className="py-1 max-h-52 overflow-y-auto">
+              {QUICK_LABELS.map((label) => (
+                <button
+                  key={label}
+                  onClick={() => handleSet(label)}
+                  className={cn(
+                    'w-full text-left px-3 py-2 text-xs hover:bg-slate-50 transition-colors flex items-center justify-between',
+                    currentIntent?.toLowerCase() === label.toLowerCase() && 'font-bold text-blue-600',
+                  )}
+                >
+                  <IntentBadge label={label} small />
+                  {currentIntent?.toLowerCase() === label.toLowerCase() && (
+                    <CheckCircle2 className="w-3 h-3 text-blue-500" />
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom label */}
+            {showCustom ? (
+              <div className="p-2 border-t border-slate-100 flex gap-1">
+                <input
+                  autoFocus
+                  value={customInput}
+                  onChange={(e) => setCustomInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleCustomSubmit()}
+                  placeholder="Ej: Consulta devolución"
+                  className="flex-1 text-xs px-2 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button onClick={handleCustomSubmit} className="px-2 py-1.5 bg-blue-600 text-white text-xs rounded-lg font-medium">
+                  OK
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowCustom(true)}
+                className="w-full text-left px-3 py-2 text-xs text-slate-400 hover:bg-slate-50 border-t border-slate-100 transition-colors"
+              >
+                + Etiqueta personalizada
+              </button>
+            )}
+
+            {/* Clear */}
+            {currentIntent && (
+              <button
+                onClick={() => handleSet(null)}
+                className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-50 border-t border-slate-100 transition-colors"
+              >
+                Quitar etiqueta
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // Conversation List
 function ConversationList({
   conversations,
@@ -46,21 +234,34 @@ function ConversationList({
   onSelect,
   filter,
   onFilterChange,
+  intentFilter,
+  onIntentFilterChange,
 }: {
   conversations: Conversation[];
   selectedId: number | null;
   onSelect: (id: number) => void;
   filter: string;
   onFilterChange: (f: string) => void;
+  intentFilter: string;
+  onIntentFilterChange: (f: string) => void;
 }) {
   const [search, setSearch] = useState('');
 
-  const filtered = conversations.filter(
-    (c) =>
+  // Collect unique intent labels present in the list
+  const intentLabels = Array.from(
+    new Set(conversations.map((c) => c.intent_label).filter(Boolean) as string[])
+  ).sort();
+
+  const filtered = conversations.filter((c) => {
+    const matchSearch =
       !search ||
       c.contact_name?.toLowerCase().includes(search.toLowerCase()) ||
-      c.last_message?.toLowerCase().includes(search.toLowerCase())
-  );
+      c.last_message?.toLowerCase().includes(search.toLowerCase());
+    const matchIntent =
+      !intentFilter ||
+      (c.intent_label?.toLowerCase() === intentFilter.toLowerCase());
+    return matchSearch && matchIntent;
+  });
 
   return (
     <div className="flex flex-col h-full border-r border-slate-200 bg-white">
@@ -77,7 +278,7 @@ function ConversationList({
             className="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-wrap">
           {['all', 'open', 'resolved'].map((f) => (
             <button
               key={f}
@@ -93,6 +294,33 @@ function ConversationList({
             </button>
           ))}
         </div>
+        {/* Intent filter chips — only shown when there are labeled conversations */}
+        {intentLabels.length > 0 && (
+          <div className="flex gap-1 flex-wrap mt-2">
+            {intentFilter && (
+              <button
+                onClick={() => onIntentFilterChange('')}
+                className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors"
+              >
+                <X className="w-2.5 h-2.5" /> Limpiar
+              </button>
+            )}
+            {intentLabels.map((label) => (
+              <button
+                key={label}
+                onClick={() => onIntentFilterChange(intentFilter === label ? '' : label)}
+                className={cn(
+                  'px-2 py-0.5 text-[10px] font-semibold rounded-full transition-colors',
+                  intentFilter === label
+                    ? getIntentColor(label) + ' ring-1 ring-current'
+                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* List */}
@@ -122,7 +350,7 @@ function ConversationList({
                       {formatRelativeTime(conv.last_message_at)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5 mb-1">
+                  <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                     <span
                       className={cn(
                         'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium',
@@ -132,6 +360,9 @@ function ConversationList({
                       <ChannelIcon channel={conv.channel} className="w-3 h-3" />
                       {getChannelLabel(conv.channel)}
                     </span>
+                    {conv.intent_label && (
+                      <IntentBadge label={conv.intent_label} small />
+                    )}
                   </div>
                   <p className="text-xs text-slate-500 truncate">{conv.last_message}</p>
                 </div>
@@ -208,12 +439,20 @@ function ConversationThread({
   const [aiLoading, setAiLoading] = useState(false);
   const [aiEscalate, setAiEscalate] = useState(false);
   const [taskExtracting, setTaskExtracting] = useState(false);
+  const [intentLabel, setIntentLabel] = useState<string | null | undefined>(undefined);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: conversation } = useApi(
     () => api.getConversation(conversationId),
     [conversationId]
   );
+
+  // Sync intent from loaded conversation
+  useEffect(() => {
+    if (conversation) {
+      setIntentLabel(conversation.intent_label ?? null);
+    }
+  }, [conversation]);
   const {
     data: messages,
     loading: messagesLoading,
@@ -387,6 +626,11 @@ function ConversationThread({
             )}
           </div>
         </div>
+        <IntentSelector
+          conversationId={conversationId}
+          currentIntent={intentLabel}
+          onIntentChange={setIntentLabel}
+        />
         <button
           onClick={handleExtractTask}
           disabled={taskExtracting}
@@ -581,6 +825,7 @@ export default function InboxPage() {
   const { conversationId } = useParams();
   const navigate = useNavigate();
   const [filter, setFilter] = useState('all');
+  const [intentFilter, setIntentFilter] = useState('');
 
   const { data: conversations, loading, refetch: refetchConversations } = useApi(
     () =>
@@ -630,6 +875,8 @@ export default function InboxPage() {
           onSelect={handleSelect}
           filter={filter}
           onFilterChange={setFilter}
+          intentFilter={intentFilter}
+          onIntentFilterChange={setIntentFilter}
         />
       </div>
 

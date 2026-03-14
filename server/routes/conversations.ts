@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import Anthropic from '@anthropic-ai/sdk';
 import db from '../db/database.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
 
@@ -122,6 +123,79 @@ router.patch('/:id/assign', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'DB Error' });
+  }
+});
+
+// PATCH /api/conversations/:id/intent — set intent label manually
+router.patch('/:id/intent', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { intent_label } = req.body;
+    const label = typeof intent_label === 'string' ? intent_label.trim().slice(0, 100) : null;
+    await db.query('UPDATE conversations SET intent_label=$1 WHERE id=$2', [label || null, req.params.id]);
+    res.json({ success: true, intent_label: label || null });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'DB Error' });
+  }
+});
+
+// POST /api/conversations/:id/detect-intent — auto-detect via AI
+router.post('/:id/detect-intent', async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured' });
+    }
+
+    // Load conversation + first 8 messages + business nicho
+    const bid = req.user!.business_id;
+    const { rows: convRows } = await db.query(
+      `SELECT c.id, ct.name as contact_name, b.nicho, b.name as business_name
+       FROM conversations c
+       JOIN contacts ct ON ct.id = c.contact_id
+       JOIN businesses b ON b.id = c.business_id
+       WHERE c.id = $1 AND c.business_id = $2`,
+      [req.params.id, bid]
+    );
+    if (convRows.length === 0) return res.status(404).json({ error: 'Conversation not found' });
+
+    const { rows: msgRows } = await db.query(
+      `SELECT sender, content FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC LIMIT 8`,
+      [req.params.id]
+    );
+
+    if (msgRows.length === 0) {
+      return res.json({ intent_label: null, message: 'No messages to analyze' });
+    }
+
+    const conv = convRows[0];
+    const transcript = msgRows
+      .map((m: any) => `${m.sender === 'client' ? 'Cliente' : 'Negocio'}: ${m.content}`)
+      .join('\n');
+
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 30,
+      temperature: 0,
+      system: `Eres un clasificador de intenciones de clientes para el negocio "${conv.business_name}" (${conv.nicho || 'general'}).
+Analiza los primeros mensajes de la conversación e identifica en 2-4 palabras qué busca el cliente.
+Responde ÚNICAMENTE con la etiqueta, sin explicación ni puntuación. Ejemplos de formato:
+Compra Shein, Envío local, Envío internacional, Personal shopper, Consulta precio, Reserva cita, Problema entrega, Información general`,
+      messages: [{ role: 'user', content: `Conversación:\n${transcript}` }],
+    });
+
+    const raw = (response.content.find((c) => c.type === 'text') as any)?.text?.trim() || '';
+    const intent_label = raw.slice(0, 100) || null;
+
+    // Persist it
+    if (intent_label) {
+      await db.query('UPDATE conversations SET intent_label=$1 WHERE id=$2', [intent_label, req.params.id]);
+    }
+
+    res.json({ intent_label });
+  } catch (err: any) {
+    console.error('[detect-intent]', err);
+    res.status(500).json({ error: err.message || 'Detection failed' });
   }
 });
 

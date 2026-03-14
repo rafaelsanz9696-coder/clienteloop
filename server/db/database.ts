@@ -271,6 +271,9 @@ export async function initDb() {
       CREATE INDEX IF NOT EXISTS idx_business_members_business ON business_members(business_id);
       CREATE INDEX IF NOT EXISTS idx_business_members_user     ON business_members(supabase_user_id);
 
+      -- F19: Lead intent label on conversations
+      ALTER TABLE conversations ADD COLUMN IF NOT EXISTS intent_label VARCHAR(100);
+
       -- Team invitations: invite-link tokens
       CREATE TABLE IF NOT EXISTS business_invitations (
         id          SERIAL PRIMARY KEY,

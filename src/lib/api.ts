@@ -134,6 +134,10 @@ export const api = {
     request<{ success: boolean }>(`/conversations/${id}/read`, { method: 'PATCH' }),
   assignConversation: (id: number, assigned_to: string) =>
     request<{ success: boolean }>(`/conversations/${id}/assign`, { method: 'PATCH', body: JSON.stringify({ assigned_to }) }),
+  setConversationIntent: (id: number, intent_label: string | null) =>
+    request<{ success: boolean; intent_label: string | null }>(`/conversations/${id}/intent`, { method: 'PATCH', body: JSON.stringify({ intent_label }) }),
+  detectConversationIntent: (id: number) =>
+    request<{ intent_label: string | null }>(`/conversations/${id}/detect-intent`, { method: 'POST' }),
 
   // Messages
   getMessages: (conversationId: number) =>
