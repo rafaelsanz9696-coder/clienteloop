@@ -1,10 +1,11 @@
-import { Menu, Search, Bell, User, Users, MessageSquare, Kanban } from 'lucide-react';
+import { Menu, Search, Bell, User, Users, MessageSquare, Kanban, HelpCircle } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import type { SearchResults } from '../../types/index';
 import { cn, getChannelColor, getChannelLabel, getStageColor, getStageLabel, formatCurrency } from '../../lib/utils';
 import { useSocket } from '../../contexts/SocketContext';
+import HelpModal from '../HelpModal';
 
 interface TopBarProps {
   title: string;
@@ -12,6 +13,7 @@ interface TopBarProps {
 }
 
 export default function TopBar({ title, onMenuClick }: TopBarProps) {
+  const [showHelp, setShowHelp] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [results, setResults] = useState<SearchResults | null>(null);
   const [showResults, setShowResults] = useState(false);
@@ -164,6 +166,14 @@ export default function TopBar({ title, onMenuClick }: TopBarProps) {
 
       {/* Right side */}
       <div className="flex items-center gap-2">
+        {/* Help button */}
+        <button
+          onClick={() => setShowHelp(true)}
+          className="p-2 text-slate-400 hover:text-purple-500 hover:bg-purple-50 rounded-full transition-colors"
+          title="Guía de uso"
+        >
+          <HelpCircle className="w-5 h-5" />
+        </button>
         <button
           onClick={() => navigate('/app/inbox')}
           className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-colors relative"
@@ -180,6 +190,8 @@ export default function TopBar({ title, onMenuClick }: TopBarProps) {
           <User className="w-5 h-5 text-slate-400" />
         </div>
       </div>
+
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </header>
   );
 }

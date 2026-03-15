@@ -1,5 +1,11 @@
 import dotenv from 'dotenv';
 dotenv.config({ override: true });
+import * as Sentry from '@sentry/node';
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: process.env.NODE_ENV ?? 'development',
+  enabled: !!process.env.SENTRY_DSN,
+});
 import express from 'express';
 import { createServer } from 'http';
 import cors from 'cors';
@@ -115,6 +121,7 @@ app.use('/api/team', requireAuth, teamRouter);
 app.use('/api/billing', billingRouter);
 
 // Global error handler
+Sentry.setupExpressErrorHandler(app);
 app.use(errorLogger);
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[Global Error Handler]', err);
