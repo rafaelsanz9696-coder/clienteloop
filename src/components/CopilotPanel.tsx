@@ -294,8 +294,10 @@ export default function CopilotPanel() {
                 <div className="w-7 h-7 bg-purple-100 rounded-full flex items-center justify-center shrink-0">
                   <Bot className="w-4 h-4 text-purple-600" />
                 </div>
-                <div className="bg-slate-100 rounded-2xl rounded-tl-md px-3.5 py-2.5 text-sm text-slate-700 leading-relaxed">
-                  ¡Hola! Soy tu Copilot. Puedo consultar datos reales de tu negocio, crear tareas y mover leads. ¿Qué necesitas?
+                <div className="bg-slate-100 rounded-2xl rounded-tl-md px-3.5 py-2.5 text-sm text-slate-700 leading-relaxed space-y-2">
+                  <p>¡Hola! 👋 Soy tu Copilot{activeBusiness?.name ? ` de ${activeBusiness.name}` : ''}.</p>
+                  <p>Puedo consultar tus datos en tiempo real, crear respuestas rápidas, actualizar tu IA, guardar memorias, agregar contactos y redactar seguimientos listos para enviar — todo desde aquí.</p>
+                  <p className="text-slate-500 text-xs">Si algo está fuera de mis capacidades, te lo digo al instante. ¿En qué te ayudo hoy?</p>
                 </div>
               </div>
 
