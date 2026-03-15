@@ -489,40 +489,16 @@ async function executeTool(
   }
 }
 
-// ─── Main route ───────────────────────────────────────────────────────────────
+// ─── System prompt builder ────────────────────────────────────────────────────
 
-router.post('/', async (req, res) => {
-  try {
-    const user = (req as any).user;
-    const businessId: number = user?.business_id;
+const NICHO_LABELS: Record<string, string> = {
+  salon: 'salón de belleza', barberia: 'barbería', clinica: 'clínica',
+  inmobiliaria: 'inmobiliaria', restaurante: 'restaurante', academia: 'academia',
+  taller: 'taller mecánico', courier: 'courier', agencia_ia: 'agencia de IA',
+};
 
-    if (!businessId || businessId === 0) {
-      return res.status(400).json({ error: 'No business configured yet' });
-    }
-
-    const { messages } = req.body as {
-      messages: Array<{ role: 'user' | 'assistant'; content: string }>;
-    };
-
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return res.status(400).json({ error: 'messages array required' });
-    }
-
-    // Load business context for system prompt
-    const { rows: bizRows } = await db.query(
-      'SELECT name, nicho, ai_context FROM businesses WHERE id = $1',
-      [businessId],
-    );
-
-    const biz = bizRows[0] || { name: 'tu negocio', nicho: 'general', ai_context: '' };
-
-    const NICHO_LABELS: Record<string, string> = {
-      salon: 'salón de belleza', barberia: 'barbería', clinica: 'clínica',
-      inmobiliaria: 'inmobiliaria', restaurante: 'restaurante', academia: 'academia',
-      taller: 'taller mecánico', courier: 'courier', agencia_ia: 'agencia de IA',
-    };
-
-    const systemPrompt = `Eres el Copilot de ClienteLoop para "${biz.name}" (${NICHO_LABELS[biz.nicho] || biz.nicho}).
+function buildSystemPrompt(biz: { name: string; nicho: string; ai_context?: string }): string {
+  return `Eres el Copilot de ClienteLoop para "${biz.name}" (${NICHO_LABELS[biz.nicho] || biz.nicho}).
 Eres el asistente ejecutivo inteligente del dueño — su mano derecha dentro del CRM.
 Tienes acceso a los datos reales del negocio a través de herramientas.
 
@@ -559,6 +535,35 @@ LO QUE NO PUEDES HACER (sé transparente sobre esto):
 - Si una solicitud está fuera de tus capacidades, explícalo con claridad y sugiere la alternativa más cercana dentro del CRM.
 
 ${biz.ai_context ? `Contexto del negocio:\n${biz.ai_context}` : ''}`;
+}
+
+// ─── Main route (non-streaming) ───────────────────────────────────────────────
+
+router.post('/', async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const businessId: number = user?.business_id;
+
+    if (!businessId || businessId === 0) {
+      return res.status(400).json({ error: 'No business configured yet' });
+    }
+
+    const { messages } = req.body as {
+      messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+    };
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'messages array required' });
+    }
+
+    // Load business context for system prompt
+    const { rows: bizRows } = await db.query(
+      'SELECT name, nicho, ai_context FROM businesses WHERE id = $1',
+      [businessId],
+    );
+
+    const biz = bizRows[0] || { name: 'tu negocio', nicho: 'general', ai_context: '' };
+    const systemPrompt = buildSystemPrompt(biz);
 
     const anthropic = getClient();
     let loopMessages: Anthropic.MessageParam[] = messages as Anthropic.MessageParam[];
@@ -639,6 +644,169 @@ ${biz.ai_context ? `Contexto del negocio:\n${biz.ai_context}` : ''}`;
   } catch (err: any) {
     console.error('[Copilot]', err);
     res.status(500).json({ error: err.message || 'Error in copilot' });
+  }
+});
+
+// ─── Streaming route (SSE) ────────────────────────────────────────────────────
+// POST /api/ai/copilot/stream
+// Same agentic loop but streams text tokens to the client via Server-Sent Events.
+// SSE events:
+//   { type: 'tool_start', name: string }   — a tool call is executing
+//   { type: 'delta', text: string }         — text token from Claude
+//   { type: 'done', toolsUsed, pendingAction, reply } — stream complete
+//   { type: 'error', message: string }      — something went wrong
+
+router.post('/stream', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const send = (data: object) => {
+    if (!res.writableEnded) res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    const user = (req as any).user;
+    const businessId: number = user?.business_id;
+
+    if (!businessId || businessId === 0) {
+      send({ type: 'error', message: 'No business configured yet' });
+      return res.end();
+    }
+
+    const { messages } = req.body as {
+      messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+    };
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      send({ type: 'error', message: 'messages array required' });
+      return res.end();
+    }
+
+    const { rows: bizRows } = await db.query(
+      'SELECT name, nicho, ai_context FROM businesses WHERE id = $1',
+      [businessId],
+    );
+    const biz = bizRows[0] || { name: 'tu negocio', nicho: 'general', ai_context: '' };
+    const systemPrompt = buildSystemPrompt(biz);
+
+    const anthropic = getClient();
+    let loopMessages: Anthropic.MessageParam[] = messages as Anthropic.MessageParam[];
+    const toolsUsed: string[] = [];
+    let pendingAction: any = null;
+    let accumulatedReply = '';
+
+    for (let i = 0; i < 5; i++) {
+      const stream = anthropic.messages.stream({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1500,
+        system: systemPrompt,
+        tools: COPILOT_TOOLS,
+        messages: loopMessages,
+      });
+
+      // Track content blocks by their position index in the streamed message
+      const blocksByIndex: Record<number, {
+        type: string; id?: string; name?: string;
+        text?: string; inputJson?: string; input?: any;
+      }> = {};
+      let stopReason = '';
+
+      // Iterate over raw SSE events from Anthropic
+      for await (const event of stream) {
+        if (event.type === 'content_block_start') {
+          const cb = event.content_block;
+          if (cb.type === 'tool_use') {
+            blocksByIndex[event.index] = { type: 'tool_use', id: cb.id, name: cb.name, inputJson: '' };
+            send({ type: 'tool_start', name: cb.name }); // → frontend shows "Consultando X..."
+          } else if (cb.type === 'text') {
+            blocksByIndex[event.index] = { type: 'text', text: '' };
+          }
+        }
+
+        if (event.type === 'content_block_delta') {
+          const block = blocksByIndex[event.index];
+          if (!block) continue;
+          if (event.delta.type === 'text_delta') {
+            block.text = (block.text ?? '') + event.delta.text;
+            accumulatedReply += event.delta.text;
+            send({ type: 'delta', text: event.delta.text }); // → frontend streams words
+          }
+          if (event.delta.type === 'input_json_delta' && block.type === 'tool_use') {
+            block.inputJson = (block.inputJson ?? '') + event.delta.partial_json;
+          }
+        }
+
+        if (event.type === 'content_block_stop') {
+          const block = blocksByIndex[event.index];
+          if (block?.type === 'tool_use') {
+            try { block.input = JSON.parse(block.inputJson || '{}'); }
+            catch { block.input = {}; }
+          }
+        }
+
+        if (event.type === 'message_delta') {
+          stopReason = event.delta.stop_reason ?? '';
+        }
+      }
+
+      if (stopReason === 'end_turn') {
+        send({ type: 'done', toolsUsed, pendingAction, reply: accumulatedReply });
+        break;
+      }
+
+      if (stopReason === 'tool_use') {
+        accumulatedReply = ''; // Reset text for next iteration
+        const toolResultContents: Anthropic.ToolResultBlockParam[] = [];
+
+        for (const block of Object.values(blocksByIndex)) {
+          if (block.type !== 'tool_use' || !block.id || !block.name) continue;
+          toolsUsed.push(block.name);
+          console.log(`[Copilot/stream] Tool: ${block.name}`);
+
+          try {
+            const { result, pendingAction: pa } = await executeTool(
+              block.name, block.input ?? {}, businessId, anthropic,
+            );
+            if (pa) pendingAction = pa;
+            toolResultContents.push({
+              type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result),
+            });
+          } catch (err: any) {
+            console.error(`[Copilot/stream] Tool error (${block.name}):`, err);
+            toolResultContents.push({
+              type: 'tool_result', tool_use_id: block.id, is_error: true, content: err.message,
+            });
+          }
+        }
+
+        // Reconstruct assistant message in Anthropic format for next loop iteration
+        const assistantContent: Array<Anthropic.TextBlock | Anthropic.ToolUseBlock> = Object.values(blocksByIndex)
+          .map((block) => {
+            if (block.type === 'text') {
+              return { type: 'text', text: block.text ?? '' } as Anthropic.TextBlock;
+            }
+            if (block.type === 'tool_use') {
+              return { type: 'tool_use', id: block.id!, name: block.name!, input: block.input ?? {} } as Anthropic.ToolUseBlock;
+            }
+            return null;
+          })
+          .filter((b): b is Anthropic.TextBlock | Anthropic.ToolUseBlock => b !== null);
+
+        loopMessages = [
+          ...loopMessages,
+          { role: 'assistant', content: assistantContent },
+          { role: 'user', content: toolResultContents },
+        ];
+      }
+    }
+
+    res.end();
+  } catch (err: any) {
+    console.error('[Copilot/stream]', err);
+    send({ type: 'error', message: err.message || 'Stream error' });
+    res.end();
   }
 });
 

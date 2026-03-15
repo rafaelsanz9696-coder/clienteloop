@@ -228,6 +228,60 @@ export const api = {
       body: JSON.stringify({ messages }),
     }),
 
+  // AI Copilot — streaming via SSE
+  // Calls /api/ai/copilot/stream and fires handlers as events arrive.
+  copilotStream: async (
+    messages: Array<{ role: string; content: string }>,
+    handlers: {
+      onToolStart?: (name: string) => void;
+      onDelta?: (text: string) => void;
+      onDone?: (data: { toolsUsed: string[]; pendingAction?: any; reply: string }) => void;
+      onError?: (message: string) => void;
+    },
+  ): Promise<void> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
+    const res = await fetch(`${BASE_URL}/ai/copilot/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-business-id': String(_activeBusinessId),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ messages }),
+    });
+
+    if (!res.ok || !res.body) {
+      handlers.onError?.(`HTTP ${res.status}`);
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? ''; // keep last partial line in buffer
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const event = JSON.parse(line.slice(6));
+          if (event.type === 'tool_start') handlers.onToolStart?.(event.name);
+          else if (event.type === 'delta') handlers.onDelta?.(event.text);
+          else if (event.type === 'done') handlers.onDone?.(event);
+          else if (event.type === 'error') handlers.onError?.(event.message);
+        } catch { /* skip malformed line */ }
+      }
+    }
+  },
+
   // Setup Assistant
   setupAssistantChat: (messages: Array<{ role: string; content: string }>) =>
     request<{ reply: string; setupComplete: boolean }>('/ai/setup-assistant/chat', {

@@ -42,6 +42,22 @@ interface PendingAction {
   requiresConfirm: boolean;
 }
 
+// Human-readable labels for each tool — shown in the thinking indicator
+const TOOL_LABELS: Record<string, string> = {
+  get_stats: 'estadísticas',
+  get_contacts: 'contactos',
+  get_pending_followups: 'seguimientos pendientes',
+  get_pipeline_summary: 'el pipeline',
+  search_conversations: 'conversaciones',
+  create_task: 'nueva tarea',
+  move_contact_stage: 'el pipeline',
+  create_quick_reply: 'plantillas',
+  update_ai_context: 'contexto IA',
+  add_memory: 'memoria',
+  create_contact: 'contactos',
+  compose_followup: 'historial de mensajes',
+};
+
 const NICHO_QUICK_PROMPTS: Record<string, string[]> = {
   courier: [
     '¿Cuántos leads nuevos tengo hoy?',
@@ -118,6 +134,7 @@ export default function CopilotPanel() {
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [confirmDone, setConfirmDone] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
+  const [currentTool, setCurrentTool] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -137,46 +154,81 @@ export default function CopilotPanel() {
     if (!text.trim() || loading) return;
 
     const userMessage: ChatMessage = { role: 'user', content: text };
-    const thinkingMessage: ChatMessage = { role: 'assistant', content: '', isThinking: true };
-
     const newMessages = [...messages, userMessage];
-    setMessages([...newMessages, thinkingMessage]);
+
+    setMessages([...newMessages, { role: 'assistant', content: '', isThinking: true }]);
     setInput('');
     setLoading(true);
+    setCurrentTool(null);
     setPendingAction(null);
     setConfirmDone(false);
 
+    const apiMessages = newMessages.map((m) => ({ role: m.role, content: m.content }));
+
     try {
-      // Build message history for the API (exclude thinking placeholder)
-      const apiMessages = newMessages.map((m) => ({ role: m.role, content: m.content }));
+      await api.copilotStream(apiMessages, {
+        onToolStart: (name) => {
+          setCurrentTool(name);
+        },
 
-      const { reply, toolsUsed, pendingAction: pa } = await api.copilotChat(apiMessages);
+        onDelta: (deltaText) => {
+          // First delta: remove thinking placeholder and start building the message
+          setCurrentTool(null);
+          setMessages((prev) => {
+            const msgs = prev.filter((m) => !m.isThinking);
+            const last = msgs[msgs.length - 1];
+            if (last?.role === 'assistant') {
+              return [...msgs.slice(0, -1), { ...last, content: last.content + deltaText }];
+            }
+            return [...msgs, { role: 'assistant', content: deltaText }];
+          });
+        },
 
-      // Replace thinking placeholder with real reply
-      setMessages((prev) => {
-        const withoutThinking = prev.filter((m) => !m.isThinking);
-        return [
-          ...withoutThinking,
-          { role: 'assistant', content: reply, toolsUsed: toolsUsed?.length ? toolsUsed : undefined },
-        ];
+        onDone: ({ toolsUsed, pendingAction: pa, reply }) => {
+          // Attach toolsUsed badge to the last assistant message
+          // Also handle edge case where no delta was received (pure tool-action responses)
+          setMessages((prev) => {
+            const msgs = prev.filter((m) => !m.isThinking);
+            const last = msgs[msgs.length - 1];
+            if (last?.role === 'assistant' && (last.content || reply)) {
+              return [
+                ...msgs.slice(0, -1),
+                {
+                  ...last,
+                  content: last.content || reply,
+                  toolsUsed: toolsUsed?.length ? toolsUsed : undefined,
+                },
+              ];
+            }
+            // Fallback: no text streamed yet
+            return [
+              ...msgs,
+              { role: 'assistant', content: reply || '✅ Listo.', toolsUsed: toolsUsed?.length ? toolsUsed : undefined },
+            ];
+          });
+          if (pa) setPendingAction(pa);
+          if (!isOpen) setHasUnread(true);
+          setCurrentTool(null);
+          setLoading(false);
+          setTimeout(() => inputRef.current?.focus(), 100);
+        },
+
+        onError: (message) => {
+          setMessages((prev) => {
+            const msgs = prev.filter((m) => !m.isThinking);
+            return [...msgs, { role: 'assistant', content: `❌ Error: ${message}` }];
+          });
+          setCurrentTool(null);
+          setLoading(false);
+          setTimeout(() => inputRef.current?.focus(), 100);
+        },
       });
-
-      if (pa) {
-        setPendingAction(pa);
-      }
-
-      if (!isOpen) {
-        setHasUnread(true);
-      }
     } catch (err: any) {
       setMessages((prev) => {
-        const withoutThinking = prev.filter((m) => !m.isThinking);
-        return [
-          ...withoutThinking,
-          { role: 'assistant', content: `Error: ${err.message || 'No se pudo conectar con el servidor'}` },
-        ];
+        const msgs = prev.filter((m) => !m.isThinking);
+        return [...msgs, { role: 'assistant', content: `❌ ${err.message || 'No se pudo conectar'}` }];
       });
-    } finally {
+      setCurrentTool(null);
       setLoading(false);
       setTimeout(() => inputRef.current?.focus(), 100);
     }
@@ -338,7 +390,11 @@ export default function CopilotPanel() {
                   <div className="bg-slate-100 rounded-2xl rounded-tl-md px-4 py-3">
                     <div className="flex items-center gap-1.5">
                       <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-500" />
-                      <span className="text-xs text-slate-500">Consultando datos...</span>
+                      <span className="text-xs text-slate-500">
+                        {currentTool
+                          ? `Consultando ${TOOL_LABELS[currentTool] ?? currentTool}...`
+                          : 'Pensando...'}
+                      </span>
                     </div>
                   </div>
                 ) : (
