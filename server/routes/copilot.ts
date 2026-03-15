@@ -13,6 +13,7 @@
 import { Router } from 'express';
 import Anthropic from '@anthropic-ai/sdk';
 import db from '../db/database.js';
+import { storeMemory } from '../lib/agent-memory.js';
 
 const router = Router();
 
@@ -157,6 +158,68 @@ const COPILOT_TOOLS: Anthropic.Tool[] = [
       required: ['new_stage'],
     },
   },
+  {
+    name: 'create_quick_reply',
+    description: 'Crea una nueva respuesta rápida de WhatsApp para el negocio. Úsala cuando el dueño pida agregar/crear una respuesta, template o plantilla.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title:    { type: 'string', description: 'Título corto (máx 40 chars)' },
+        content:  { type: 'string', description: 'Mensaje completo listo para enviar, puede incluir {{nombre}}' },
+        category: { type: 'string', description: 'Categoría: saludo, precios, horarios, politicas, promocion, seguimiento, general' },
+      },
+      required: ['title', 'content'],
+    },
+  },
+  {
+    name: 'update_ai_context',
+    description: 'Actualiza el contexto de la IA del negocio. Usa mode=append para agregar info sin borrar lo anterior; mode=replace para reescribir completamente.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        new_context: { type: 'string', description: 'Nuevo texto a agregar o reemplazar en el contexto' },
+        mode:        { type: 'string', enum: ['append', 'replace'], description: 'append: agrega al final | replace: reemplaza todo' },
+      },
+      required: ['new_context', 'mode'],
+    },
+  },
+  {
+    name: 'add_memory',
+    description: 'Guarda un dato importante en la memoria del negocio para que la IA lo recuerde siempre. Se ejecuta automáticamente sin confirmación.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        type:    { type: 'string', enum: ['faq', 'style', 'pattern', 'client_insight'], description: 'faq: hecho concreto | style: tono/estilo | pattern: pregunta frecuente | client_insight: insight de clientes' },
+        content: { type: 'string', description: 'Contenido claro y específico a recordar' },
+      },
+      required: ['type', 'content'],
+    },
+  },
+  {
+    name: 'create_contact',
+    description: 'Agrega un nuevo contacto/lead al CRM.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name:    { type: 'string', description: 'Nombre completo del contacto' },
+        phone:   { type: 'string', description: 'Teléfono con código de país, ej: +521234567890' },
+        channel: { type: 'string', enum: ['whatsapp', 'instagram', 'email', 'web'], description: 'Canal de origen' },
+      },
+      required: ['name'],
+    },
+  },
+  {
+    name: 'compose_followup',
+    description: 'Genera y propone enviar un mensaje de seguimiento personalizado a un contacto que no ha respondido. Muestra el mensaje para que el dueño lo apruebe antes de enviar.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        contact_identifier: { type: 'string', description: 'Nombre o teléfono del contacto' },
+        context_hint:       { type: 'string', description: 'Contexto extra para personalizar el mensaje (opcional)' },
+      },
+      required: ['contact_identifier'],
+    },
+  },
 ];
 
 // ─── Tool executor ────────────────────────────────────────────────────────────
@@ -165,6 +228,7 @@ async function executeTool(
   toolName: string,
   toolInput: Record<string, any>,
   businessId: number,
+  anthropic: Anthropic,
 ): Promise<{ result: any; pendingAction?: any }> {
   switch (toolName) {
     case 'get_stats': {
@@ -308,6 +372,118 @@ async function executeTool(
       return { result: { success: true, contact_id: id, new_stage } };
     }
 
+    case 'create_quick_reply': {
+      const { title, content, category } = toolInput;
+      return {
+        result: {
+          status: 'pending_confirmation',
+          message: `Respuesta rápida "${title}" lista para crear. Pendiente de confirmación del usuario.`,
+        },
+        pendingAction: {
+          action: 'create_quick_reply',
+          data: { title, content, category: category || 'general' },
+          requiresConfirm: true,
+        },
+      };
+    }
+
+    case 'update_ai_context': {
+      const { rows: bizCtxRows } = await db.query('SELECT ai_context FROM businesses WHERE id=$1', [businessId]);
+      const currentCtx = bizCtxRows[0]?.ai_context || '';
+      const preview = toolInput.mode === 'append'
+        ? (currentCtx ? currentCtx + '\n\n' + toolInput.new_context : toolInput.new_context)
+        : toolInput.new_context;
+      return {
+        result: {
+          status: 'pending_confirmation',
+          message: `Contexto de IA listo para actualizar (modo: ${toolInput.mode}). Pendiente de confirmación.`,
+        },
+        pendingAction: {
+          action: 'update_ai_context',
+          data: { preview, mode: toolInput.mode, new_context: toolInput.new_context },
+          requiresConfirm: true,
+        },
+      };
+    }
+
+    case 'add_memory': {
+      await storeMemory(businessId, toolInput.type, toolInput.content, 'auto_learned', 8);
+      return { result: { status: 'saved', type: toolInput.type, content: toolInput.content } };
+    }
+
+    case 'create_contact': {
+      const { name, phone, channel } = toolInput;
+      return {
+        result: {
+          status: 'pending_confirmation',
+          message: `Contacto "${name}" listo para agregar al CRM. Pendiente de confirmación.`,
+        },
+        pendingAction: {
+          action: 'create_contact',
+          data: { title: name, phone: phone || null, channel: channel || 'whatsapp' },
+          requiresConfirm: true,
+        },
+      };
+    }
+
+    case 'compose_followup': {
+      const { contact_identifier, context_hint } = toolInput;
+      // Find open conversation for this contact
+      const { rows: ctRows } = await db.query(
+        `SELECT ct.id, ct.name, c.id as conv_id, c.last_message_at,
+                EXTRACT(EPOCH FROM (NOW() - c.last_message_at)) / 3600 AS hours_silent
+         FROM contacts ct
+         JOIN conversations c ON c.contact_id = ct.id
+         WHERE c.business_id = $1
+           AND (ct.name ILIKE $2 OR ct.phone LIKE $2)
+           AND c.status = 'open'
+         ORDER BY c.last_message_at ASC LIMIT 1`,
+        [businessId, `%${contact_identifier}%`],
+      );
+      if (ctRows.length === 0) {
+        return { result: { error: `No se encontró conversación abierta para "${contact_identifier}"` } };
+      }
+
+      const conv = ctRows[0];
+      const { rows: msgRows } = await db.query(
+        `SELECT sender, content FROM messages WHERE conversation_id=$1 ORDER BY created_at ASC`,
+        [conv.conv_id],
+      );
+      const { rows: bizRows2 } = await db.query(
+        'SELECT name, nicho, ai_context FROM businesses WHERE id=$1',
+        [businessId],
+      );
+      const biz = bizRows2[0];
+      const transcript = msgRows.slice(-8).map((m: any) =>
+        `${m.sender === 'client' ? conv.name : biz.name}: ${m.content}`,
+      ).join('\n');
+      const hoursSilent = Number(conv.hours_silent);
+      const silenceLabel = hoursSilent >= 24
+        ? `${Math.floor(hoursSilent / 24)} día(s)` : `${Math.floor(hoursSilent)} hora(s)`;
+
+      const followupResp = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 200,
+        temperature: 0.7,
+        system: `Genera UN mensaje de seguimiento para ${conv.name} de "${biz.name}" (${biz.nicho || 'general'}). Lleva ${silenceLabel} sin responder.${context_hint ? ` Contexto extra: ${context_hint}` : ''} Solo el mensaje, 2-3 líneas, cálido.${biz.ai_context ? `\n${biz.ai_context}` : ''}`,
+        messages: [{ role: 'user', content: transcript ? `Historial:\n${transcript}` : '(Sin historial previo)' }],
+      });
+      const msgText = (followupResp.content.find((c: any) => c.type === 'text') as any)?.text?.trim() || '';
+
+      return {
+        result: {
+          status: 'pending_confirmation',
+          message: `Mensaje de seguimiento generado para ${conv.name}. Pendiente de confirmación antes de enviar.`,
+          generated_message: msgText,
+        },
+        pendingAction: {
+          action: 'compose_followup',
+          data: { conversation_id: conv.conv_id, contact_name: conv.name, message: msgText },
+          requiresConfirm: true,
+        },
+      };
+    }
+
     default:
       return { result: { error: `Tool "${toolName}" not implemented` } };
   }
@@ -356,6 +532,9 @@ REGLAS:
 - Para acciones irreversibles importantes, confirma primero con el usuario.
 - Cuando uses get_contacts o get_pending_followups, incluye nombres reales en tu respuesta.
 - Sé el empleado más útil que el dueño haya tenido.
+- Puedes crear respuestas rápidas, actualizar el contexto de IA, guardar memorias, agregar contactos y componer seguimientos. Úsalas cuando el dueño lo pida.
+- Para add_memory NO necesitas confirmación, se guarda automáticamente y confirmas al dueño.
+- Para compose_followup primero busca al contacto, genera el mensaje y muéstralo para que el dueño confirme antes de enviar.
 
 ${biz.ai_context ? `Contexto del negocio:\n${biz.ai_context}` : ''}`;
 
@@ -396,6 +575,7 @@ ${biz.ai_context ? `Contexto del negocio:\n${biz.ai_context}` : ''}`;
               block.name,
               block.input as Record<string, any>,
               businessId,
+              anthropic,
             );
 
             if (pa) pendingAction = pa;

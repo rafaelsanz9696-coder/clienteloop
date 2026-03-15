@@ -9,6 +9,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Bot, X, Send, Loader2, Zap, CheckCircle2, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { api } from '../lib/api';
+import { useBusiness } from '../contexts/BusinessContext';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -18,23 +19,97 @@ interface ChatMessage {
 }
 
 interface PendingAction {
-  action: string;
+  action: 'create_task' | 'create_quick_reply' | 'update_ai_context' | 'create_contact' | 'compose_followup';
   data: {
+    // create_task
     title?: string;
     contact_name?: string;
     due_time?: string | null;
+    // create_quick_reply
+    content?: string;
+    category?: string;
+    // update_ai_context
+    preview?: string;
+    mode?: 'replace' | 'append';
+    new_context?: string;
+    // create_contact (title = contact name)
+    phone?: string;
+    channel?: string;
+    // compose_followup
+    conversation_id?: number;
+    message?: string;
   };
   requiresConfirm: boolean;
 }
 
-const QUICK_PROMPTS = [
+const NICHO_QUICK_PROMPTS: Record<string, string[]> = {
+  courier: [
+    '¿Cuántos leads nuevos tengo hoy?',
+    '¿Quién no ha respondido en 3 días?',
+    'Crea respuesta rápida para cotización Shein',
+    'Genera seguimiento para un cliente silencioso',
+  ],
+  salon: [
+    '¿Cuántas citas tengo esta semana?',
+    '¿Quién no ha respondido en 3 días?',
+    'Crea respuesta rápida para reserva de cita',
+    'Resumen del pipeline de leads',
+  ],
+  barberia: [
+    '¿Cuántos leads nuevos esta semana?',
+    'Lista clientes sin respuesta hace 2 días',
+    'Crea respuesta rápida para precios de corte',
+    'Mueve a "en proceso" los leads nuevos activos',
+  ],
+  clinica: [
+    '¿Cuántas consultas agendadas hoy?',
+    '¿Quién no ha confirmado su cita?',
+    'Crea respuesta rápida para agendar consulta',
+    'Resumen de leads por etapa',
+  ],
+  inmobiliaria: [
+    '¿Cuántos prospectos tengo en proceso?',
+    'Lista leads sin respuesta hace 3 días',
+    'Crea respuesta rápida para visita a propiedad',
+    '¿Cuál es el deal más valioso del pipeline?',
+  ],
+  restaurante: [
+    '¿Cuántas reservas tengo hoy?',
+    '¿Quién no ha confirmado su reserva?',
+    'Crea respuesta rápida para pedidos a domicilio',
+    'Resumen de conversaciones abiertas',
+  ],
+  academia: [
+    '¿Cuántos leads de inscripción tengo?',
+    'Lista interesados sin respuesta hace 2 días',
+    'Crea respuesta rápida con info del curso',
+    'Mueve leads que confirmaron a "en proceso"',
+  ],
+  taller: [
+    '¿Cuántos diagnósticos pendientes tengo?',
+    '¿Quién no ha respondido la cotización?',
+    'Crea respuesta rápida para cotizaciones',
+    'Genera seguimiento para cliente con cotización enviada',
+  ],
+  agencia_ia: [
+    '¿Cuántos prospectos nuevos esta semana?',
+    'Lista demos pendientes de seguimiento',
+    'Crea respuesta rápida para cotización de proyecto',
+    '¿Cuál es el deal más valioso en proceso?',
+  ],
+};
+
+const DEFAULT_QUICK_PROMPTS = [
   '¿Cuántos leads nuevos tengo hoy?',
   '¿Quién no me ha respondido en 3 días?',
   'Resumen del pipeline esta semana',
-  '¿Cuál es mi deal más valioso en proceso?',
+  'Genera seguimiento para un cliente silencioso',
 ];
 
 export default function CopilotPanel() {
+  const { activeBusiness } = useBusiness();
+  const QUICK_PROMPTS = NICHO_QUICK_PROMPTS[activeBusiness?.nicho ?? ''] ?? DEFAULT_QUICK_PROMPTS;
+
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -119,11 +194,44 @@ export default function CopilotPanel() {
     setConfirmLoading(true);
 
     try {
-      if (pendingAction.action === 'create_task') {
-        await api.createTask({
-          title: pendingAction.data.title || 'Tarea de seguimiento',
-          due_time: pendingAction.data.due_time ?? undefined,
-        });
+      switch (pendingAction.action) {
+        case 'create_task':
+          await api.createTask({
+            title: pendingAction.data.title || 'Tarea de seguimiento',
+            due_time: pendingAction.data.due_time ?? undefined,
+          });
+          break;
+
+        case 'create_quick_reply':
+          await api.createQuickReply({
+            title: pendingAction.data.title,
+            content: pendingAction.data.content,
+            category: pendingAction.data.category || 'general',
+          });
+          break;
+
+        case 'update_ai_context':
+          if (activeBusiness?.id) {
+            await api.updateBusiness(activeBusiness.id, { ai_context: pendingAction.data.preview });
+          }
+          break;
+
+        case 'create_contact':
+          await api.createContact({
+            name: pendingAction.data.title,
+            phone: pendingAction.data.phone || undefined,
+            channel: (pendingAction.data.channel as any) || 'whatsapp',
+            pipeline_stage: 'new',
+          });
+          break;
+
+        case 'compose_followup':
+          await api.sendMessage({
+            conversation_id: pendingAction.data.conversation_id!,
+            content: pendingAction.data.message!,
+            sender: 'agent',
+          });
+          break;
       }
       setConfirmDone(true);
       setPendingAction(null);
@@ -268,26 +376,87 @@ export default function CopilotPanel() {
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span className="text-xs font-semibold">Acción pendiente</span>
               </div>
+
+              {/* create_task */}
               {pendingAction.action === 'create_task' && (
-                <p className="text-xs text-slate-700">
-                  Crear tarea: <strong>{pendingAction.data.title}</strong>
+                <>
+                  <p className="text-xs font-semibold text-purple-700">📋 Crear tarea</p>
+                  <p className="text-xs text-slate-700">{pendingAction.data.title}</p>
                   {pendingAction.data.due_time && (
-                    <> · {new Date(pendingAction.data.due_time).toLocaleString('es')}</>
+                    <p className="text-[10px] text-slate-500">⏰ {new Date(pendingAction.data.due_time).toLocaleString('es')}</p>
                   )}
-                </p>
+                </>
               )}
-              <button
-                onClick={handleConfirmAction}
-                disabled={confirmLoading}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-60 transition-colors"
-              >
-                {confirmLoading ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="w-3 h-3" />
-                )}
-                Confirmar y guardar
-              </button>
+
+              {/* create_quick_reply */}
+              {pendingAction.action === 'create_quick_reply' && (
+                <>
+                  <p className="text-xs font-semibold text-purple-700">⚡ Nueva respuesta rápida</p>
+                  <p className="text-xs font-medium text-slate-700">{pendingAction.data.title}</p>
+                  <p className="text-xs text-slate-600 bg-white rounded p-2 border border-purple-100 italic">
+                    &ldquo;{pendingAction.data.content}&rdquo;
+                  </p>
+                  <p className="text-[10px] text-slate-400">Categoría: {pendingAction.data.category}</p>
+                </>
+              )}
+
+              {/* update_ai_context */}
+              {pendingAction.action === 'update_ai_context' && (
+                <>
+                  <p className="text-xs font-semibold text-purple-700">
+                    🧠 {pendingAction.data.mode === 'replace' ? 'Reemplazar' : 'Actualizar'} contexto IA
+                  </p>
+                  <pre className="text-[10px] text-slate-600 bg-white rounded p-2 border border-purple-100 whitespace-pre-wrap max-h-28 overflow-y-auto">
+                    {pendingAction.data.preview}
+                  </pre>
+                </>
+              )}
+
+              {/* create_contact */}
+              {pendingAction.action === 'create_contact' && (
+                <>
+                  <p className="text-xs font-semibold text-purple-700">👤 Agregar contacto</p>
+                  <p className="text-xs text-slate-700 font-medium">{pendingAction.data.title}</p>
+                  {pendingAction.data.phone && (
+                    <p className="text-[10px] text-slate-500">📱 {pendingAction.data.phone}</p>
+                  )}
+                  <p className="text-[10px] text-slate-500">Canal: {pendingAction.data.channel}</p>
+                </>
+              )}
+
+              {/* compose_followup */}
+              {pendingAction.action === 'compose_followup' && (
+                <>
+                  <p className="text-xs font-semibold text-purple-700">
+                    💬 Enviar seguimiento a {pendingAction.data.contact_name}
+                  </p>
+                  <p className="text-xs text-slate-600 bg-white rounded p-2 border border-purple-100 italic">
+                    &ldquo;{pendingAction.data.message}&rdquo;
+                  </p>
+                </>
+              )}
+
+              {/* Confirm / Cancel buttons */}
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={handleConfirmAction}
+                  disabled={confirmLoading}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-60 transition-colors"
+                >
+                  {confirmLoading ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-3 h-3" />
+                  )}
+                  Confirmar y ejecutar
+                </button>
+                <button
+                  onClick={() => setPendingAction(null)}
+                  className="flex-1 py-1.5 text-xs font-medium border border-purple-200 text-purple-600 rounded-lg hover:bg-purple-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
             </div>
           )}
 
@@ -295,7 +464,7 @@ export default function CopilotPanel() {
           {confirmDone && (
             <div className="ml-9 flex items-center gap-1.5 text-green-600 text-xs">
               <CheckCircle2 className="w-4 h-4" />
-              <span>Tarea creada correctamente</span>
+              <span>✅ Acción ejecutada correctamente</span>
             </div>
           )}
 
