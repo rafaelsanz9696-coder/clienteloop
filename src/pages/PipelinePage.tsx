@@ -248,7 +248,7 @@ function PipelineColumn({
     <div
       onDragOver={onDragOver}
       onDrop={(e) => onDrop(e, stageKey)}
-      className="flex flex-col min-w-[280px] flex-1"
+      className="flex flex-col min-w-[240px] sm:min-w-[280px] flex-1"
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">

@@ -442,7 +442,7 @@ function MessageBubble({ message }: { message: Message }) {
     <div className={cn('flex mb-3', isClient ? 'justify-start' : 'justify-end')}>
       <div
         className={cn(
-          'max-w-[75%] px-4 py-2.5 rounded-2xl text-sm',
+          'max-w-[85%] sm:max-w-[75%] px-4 py-2.5 rounded-2xl text-sm',
           isClient
             ? 'bg-slate-100 text-slate-800 rounded-bl-md'
             : message.is_ai_generated

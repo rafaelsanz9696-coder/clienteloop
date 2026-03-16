@@ -694,7 +694,7 @@ export default function AppointmentsPage() {
       </div>
 
       {/* ── Calendar body ── */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-y-auto">
 
         {/* ── Month view ── */}
         {viewMode === 'month' && (
@@ -709,8 +709,8 @@ export default function AppointmentsPage() {
           </div>
         )}
 
-        {/* ── Week view ── */}
-        {viewMode === 'week' && <div className="min-w-[680px]">
+        {/* ── Week view — horizontally scrollable on mobile ── */}
+        {viewMode === 'week' && <div className="overflow-x-auto"><div className="min-w-[680px]">
           {/* Day headers */}
           <div className="grid border-b border-slate-200 bg-white sticky top-0 z-10"
             style={{ gridTemplateColumns: '52px repeat(7, 1fr)' }}>
@@ -810,7 +810,7 @@ export default function AppointmentsPage() {
               );
             })}
           </div>
-        </div>}
+        </div></div>}
 
         {/* Empty state — week only */}
         {viewMode === 'week' && apptList.length === 0 && (
