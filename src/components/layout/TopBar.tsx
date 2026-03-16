@@ -18,7 +18,11 @@ export default function TopBar({ title, onMenuClick }: TopBarProps) {
   const [results, setResults] = useState<SearchResults | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadConvs, setUnreadConvs] = useState<any[]>([]);
+  const [loadingNotifs, setLoadingNotifs] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { totalUnread } = useSocket();
@@ -56,10 +60,33 @@ export default function TopBar({ title, onMenuClick }: TopBarProps) {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
         setShowResults(false);
       }
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setShowNotifications(false);
+      }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  async function handleBellClick() {
+    if (showNotifications) {
+      setShowNotifications(false);
+      return;
+    }
+    setShowNotifications(true);
+    if (totalUnread > 0) {
+      setLoadingNotifs(true);
+      try {
+        const data = await api.getConversations({ status: 'open' });
+        const withUnread = (Array.isArray(data) ? data : [])
+          .filter((c: any) => c.unread_count > 0)
+          .sort((a: any, b: any) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime())
+          .slice(0, 6);
+        setUnreadConvs(withUnread);
+      } catch { /* ignore */ }
+      finally { setLoadingNotifs(false); }
+    }
+  }
 
   function close() {
     setShowResults(false);
@@ -174,18 +201,67 @@ export default function TopBar({ title, onMenuClick }: TopBarProps) {
         >
           <HelpCircle className="w-5 h-5" />
         </button>
-        <button
-          onClick={() => navigate('/app/inbox')}
-          className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-colors relative"
-          title={totalUnread > 0 ? `${totalUnread} mensajes sin leer` : 'Inbox'}
-        >
-          <Bell className="w-5 h-5" />
-          {totalUnread > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] font-bold min-w-[16px] h-[16px] rounded-full flex items-center justify-center px-0.5">
-              {totalUnread > 9 ? '9+' : totalUnread}
-            </span>
+        <div ref={notifRef} className="relative">
+          <button
+            onClick={handleBellClick}
+            className="p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-full transition-colors relative"
+            title={totalUnread > 0 ? `${totalUnread} mensajes sin leer` : 'Notificaciones'}
+          >
+            <Bell className="w-5 h-5" />
+            {totalUnread > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] font-bold min-w-[16px] h-[16px] rounded-full flex items-center justify-center px-0.5">
+                {totalUnread > 9 ? '9+' : totalUnread}
+              </span>
+            )}
+          </button>
+
+          {/* Notification dropdown */}
+          {showNotifications && (
+            <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-700">
+                  {totalUnread > 0 ? `${totalUnread} sin leer` : 'Sin mensajes nuevos'}
+                </span>
+                <button
+                  onClick={() => { navigate('/app/inbox'); setShowNotifications(false); }}
+                  className="text-xs text-blue-500 hover:underline"
+                >
+                  Ver todo el inbox
+                </button>
+              </div>
+              {loadingNotifs && (
+                <div className="px-4 py-3 text-xs text-slate-400 text-center">Cargando...</div>
+              )}
+              {!loadingNotifs && unreadConvs.length === 0 && totalUnread === 0 && (
+                <div className="px-4 py-4 text-xs text-slate-400 text-center">
+                  No tienes mensajes sin leer 🎉
+                </div>
+              )}
+              {!loadingNotifs && unreadConvs.map((conv) => (
+                <button
+                  key={conv.id}
+                  onClick={() => { navigate(`/app/inbox/${conv.id}`); setShowNotifications(false); }}
+                  className="w-full text-left px-4 py-3 hover:bg-slate-50 border-b border-slate-50 last:border-b-0 flex items-start gap-3 transition-colors"
+                >
+                  <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold text-blue-600">
+                    {(conv.contact_name ?? '?').charAt(0)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-xs font-semibold text-slate-800 truncate">{conv.contact_name}</span>
+                      {conv.unread_count > 0 && (
+                        <span className="bg-red-500 text-white text-[9px] font-bold min-w-[16px] h-[16px] rounded-full flex items-center justify-center px-0.5 shrink-0">
+                          {conv.unread_count > 9 ? '9+' : conv.unread_count}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 truncate mt-0.5">{conv.last_message || 'Sin mensajes'}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
           )}
-        </button>
+        </div>
         <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
           <User className="w-5 h-5 text-slate-400" />
         </div>

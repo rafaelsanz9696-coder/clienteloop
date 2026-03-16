@@ -253,7 +253,26 @@ export const api = {
     });
 
     if (!res.ok || !res.body) {
-      handlers.onError?.(`HTTP ${res.status}`);
+      // Fallback to non-streaming endpoint when SSE fails (e.g. Railway proxy timeout)
+      try {
+        const fbRes = await fetch(`${BASE_URL}/ai/copilot`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-business-id': String(_activeBusinessId),
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ messages }),
+        });
+        const data = await fbRes.json();
+        if (fbRes.ok && data.reply) {
+          handlers.onDone?.({ toolsUsed: data.toolsUsed ?? [], pendingAction: data.pendingAction, reply: data.reply });
+        } else {
+          handlers.onError?.(data.error ?? `HTTP ${res.status}`);
+        }
+      } catch {
+        handlers.onError?.(`HTTP ${res.status}`);
+      }
       return;
     }
 

@@ -350,26 +350,38 @@ async function executeTool(
     case 'move_contact_stage': {
       const { contact_name, contact_id, new_stage } = toolInput;
       let id = contact_id;
+      let resolvedName = contact_name ?? '';
 
       if (!id && contact_name) {
         const { rows } = await db.query(
           'SELECT id, name FROM contacts WHERE business_id = $1 AND name ILIKE $2 LIMIT 1',
           [businessId, `%${contact_name}%`],
-        );
+        ) as { rows: Array<{ id: number; name: string }> };
         if (rows.length === 0) {
           return { result: { error: `No se encontró un contacto con el nombre "${contact_name}"` } };
         }
         id = rows[0].id;
+        resolvedName = rows[0].name;
       }
 
       if (!id) return { result: { error: 'Se requiere contact_name o contact_id' } };
 
-      await db.query(
-        'UPDATE contacts SET pipeline_stage = $1 WHERE id = $2 AND business_id = $3',
-        [new_stage, id, businessId],
-      );
+      const STAGE_LABELS: Record<string, string> = {
+        new: 'Nuevo', contacted: 'Contactado', in_progress: 'En proceso',
+        closed: 'Cerrado', lost: 'Perdido',
+      };
 
-      return { result: { success: true, contact_id: id, new_stage } };
+      return {
+        result: {
+          status: 'pending_confirmation',
+          message: `Mover a ${resolvedName} a "${STAGE_LABELS[new_stage] ?? new_stage}". Pendiente de confirmación.`,
+        },
+        pendingAction: {
+          action: 'move_contact_stage',
+          data: { contact_id: id, title: resolvedName, new_stage },
+          requiresConfirm: true,
+        },
+      };
     }
 
     case 'create_quick_reply': {

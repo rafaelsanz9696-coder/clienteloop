@@ -19,7 +19,7 @@ interface ChatMessage {
 }
 
 interface PendingAction {
-  action: 'create_task' | 'create_quick_reply' | 'update_ai_context' | 'create_contact' | 'compose_followup';
+  action: 'create_task' | 'create_quick_reply' | 'update_ai_context' | 'create_contact' | 'compose_followup' | 'move_contact_stage';
   data: {
     // create_task
     title?: string;
@@ -38,6 +38,9 @@ interface PendingAction {
     // compose_followup
     conversation_id?: number;
     message?: string;
+    // move_contact_stage
+    contact_id?: number;
+    new_stage?: string;
   };
   requiresConfirm: boolean;
 }
@@ -284,6 +287,13 @@ export default function CopilotPanel() {
             sender: 'agent',
           });
           break;
+
+        case 'move_contact_stage':
+          await api.updateContactStage(
+            pendingAction.data.contact_id!,
+            pendingAction.data.new_stage!,
+          );
+          break;
       }
       setConfirmDone(true);
       setPendingAction(null);
@@ -490,6 +500,18 @@ export default function CopilotPanel() {
                   </p>
                   <p className="text-xs text-slate-600 bg-white rounded p-2 border border-purple-100 italic">
                     &ldquo;{pendingAction.data.message}&rdquo;
+                  </p>
+                </>
+              )}
+
+              {/* move_contact_stage */}
+              {pendingAction.action === 'move_contact_stage' && (
+                <>
+                  <p className="text-xs font-semibold text-purple-700">🔀 Mover en pipeline</p>
+                  <p className="text-xs text-slate-700">
+                    <span className="font-medium">{pendingAction.data.title}</span>
+                    {' → '}
+                    <span className="font-medium capitalize">{pendingAction.data.new_stage}</span>
                   </p>
                 </>
               )}
