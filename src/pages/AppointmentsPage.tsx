@@ -100,6 +100,124 @@ function groupByDay(appts: Appointment[]): Record<string, { appt: Appointment; c
   return result;
 }
 
+// ─── MONTH VIEW HELPERS ────────────────────────────────────────────────────────
+
+/** Returns 42 Date[] for a 6×7 month grid, always starting on Monday */
+function getMonthGrid(year: number, month: number): Date[] {
+  const first = new Date(year, month, 1);
+  const dow = first.getDay(); // 0=Sun
+  const offset = dow === 0 ? -6 : 1 - dow; // shift to Monday
+  const start = new Date(first);
+  start.setDate(first.getDate() + offset);
+  return Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    return d;
+  });
+}
+
+/** Build YYYY-MM-DD → Appointment[] map for O(1) day lookup */
+function buildAppointmentsByDate(appts: Appointment[]): Record<string, Appointment[]> {
+  return appts.reduce<Record<string, Appointment[]>>((m, a) => {
+    const k = toDateStr(new Date(a.start_time));
+    (m[k] ??= []).push(a);
+    return m;
+  }, {});
+}
+
+// ─── MONTH VIEW CONSTANTS ──────────────────────────────────────────────────────
+const CHIP_COLORS: Record<string, string> = {
+  confirmed: 'bg-blue-500 text-white',
+  pending:   'bg-amber-400 text-amber-900',
+  cancelled: 'bg-slate-300 text-slate-500 line-through',
+  completed: 'bg-emerald-500 text-white',
+};
+const MONTH_NAMES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const DAY_HEADERS = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+
+// ─── MONTH GRID COMPONENT ─────────────────────────────────────────────────────
+interface MonthGridProps {
+  year: number;
+  month: number;
+  appointmentsByDate: Record<string, Appointment[]>;
+  onDayClick: (d: Date) => void;
+  onChipClick: (a: Appointment) => void;
+}
+
+function MonthGrid({ year, month, appointmentsByDate, onDayClick, onChipClick }: MonthGridProps) {
+  const todayStr = toDateStr(new Date());
+  const grid = getMonthGrid(year, month);
+  const weeks = Array.from({ length: 6 }, (_, i) => grid.slice(i * 7, i * 7 + 7));
+  return (
+    <div className="flex flex-col h-full">
+      {/* Day-of-week headers */}
+      <div className="grid grid-cols-7 border-b border-slate-200 bg-white shrink-0">
+        {DAY_HEADERS.map((n) => (
+          <div key={n} className="py-2 text-center text-[10px] font-semibold uppercase text-slate-400 tracking-wide">
+            {n}
+          </div>
+        ))}
+      </div>
+      {/* 6-row grid */}
+      <div className="grid grid-rows-6 flex-1">
+        {weeks.map((week, wi) => (
+          <div key={wi} className="grid grid-cols-7 border-b border-slate-100 last:border-b-0">
+            {week.map((date, di) => {
+              const key = toDateStr(date);
+              const isToday = key === todayStr;
+              const isThisMonth = date.getMonth() === month;
+              const dayAppts = appointmentsByDate[key] ?? [];
+              const visible = dayAppts.slice(0, 3);
+              const overflow = dayAppts.length - visible.length;
+              return (
+                <div
+                  key={di}
+                  onClick={() => onDayClick(date)}
+                  className={cn(
+                    'border-r border-slate-100 last:border-r-0 p-1 cursor-pointer hover:bg-slate-50 transition-colors',
+                    isToday && 'bg-blue-50/60',
+                    !isThisMonth && 'bg-slate-50/40',
+                  )}
+                >
+                  <div className={cn(
+                    'text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center mb-0.5',
+                    isToday ? 'bg-blue-600 text-white' : isThisMonth ? 'text-slate-700' : 'text-slate-300',
+                  )}>
+                    {date.getDate()}
+                  </div>
+                  <div className="space-y-0.5">
+                    {visible.map((a) => (
+                      <div
+                        key={a.id}
+                        onClick={(e) => { e.stopPropagation(); onChipClick(a); }}
+                        title={a.title}
+                        className={cn(
+                          'w-full truncate text-[10px] leading-none px-1 py-0.5 rounded cursor-pointer hover:opacity-80',
+                          CHIP_COLORS[a.status] ?? CHIP_COLORS.confirmed,
+                        )}
+                      >
+                        {a.contact_name ?? a.title}
+                      </div>
+                    ))}
+                    {overflow > 0 && (
+                      <div
+                        onClick={(e) => { e.stopPropagation(); onDayClick(date); }}
+                        className="text-[10px] text-blue-600 font-medium cursor-pointer hover:underline pl-1"
+                      >
+                        +{overflow} más
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── STATUS BADGE ─────────────────────────────────────────────────────────────
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   confirmed: { label: 'Confirmada',  cls: 'bg-blue-100 text-blue-700' },
@@ -474,50 +592,98 @@ function ViewAppointmentModal({ appointment, onClose, onRefresh }: ViewModalProp
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function AppointmentsPage() {
   const { activeBusinessId } = useBusiness();
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
-  const [showCreate, setShowCreate] = useState(false);
+  const [viewMode, setViewMode]       = useState<'week' | 'month'>('week');
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [showCreate, setShowCreate]   = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | undefined>();
-  const [viewing, setViewing] = useState<Appointment | null>(null);
+  const [viewing, setViewing]         = useState<Appointment | null>(null);
 
-  const weekEnd = addDays(weekStart, 6);
-  const days    = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  // Derived from currentDate
+  const weekStart = startOfWeek(currentDate);
+  const weekEnd   = addDays(weekStart, 6);
+  const days      = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+
+  // Fetch range changes based on view mode
+  const monthGrid = getMonthGrid(currentDate.getFullYear(), currentDate.getMonth());
+  const fetchFrom = viewMode === 'week' ? weekStart : monthGrid[0];
+  const fetchTo   = viewMode === 'week' ? weekEnd   : monthGrid[41];
 
   const { data: appointments, refetch } = useApi(
-    () => api.getAppointments(toDateStr(weekStart), toDateStr(weekEnd)),
-    [weekStart, activeBusinessId]
+    () => api.getAppointments(toDateStr(fetchFrom), toDateStr(fetchTo)),
+    [fetchFrom.toISOString(), viewMode, activeBusinessId],
   );
 
   const apptList: Appointment[] = appointments ?? [];
   const conflicts = detectConflicts(apptList);
   const grouped   = groupByDay(apptList);
 
-  const prevWeek = useCallback(() => setWeekStart((d) => addDays(d, -7)), []);
-  const nextWeek = useCallback(() => setWeekStart((d) => addDays(d, 7)),  []);
-  const goToday  = useCallback(() => setWeekStart(startOfWeek(new Date())), []);
+  // Week navigation
+  const prevWeek = useCallback(() => setCurrentDate((d) => addDays(d, -7)),  []);
+  const nextWeek = useCallback(() => setCurrentDate((d) => addDays(d, 7)),   []);
+  const goToday  = useCallback(() => setCurrentDate(new Date()),              []);
+
+  // Month navigation
+  const prevMonth = useCallback(() => setCurrentDate((d) => {
+    const r = new Date(d); r.setDate(1); r.setMonth(r.getMonth() - 1); return r;
+  }), []);
+  const nextMonth = useCallback(() => setCurrentDate((d) => {
+    const r = new Date(d); r.setDate(1); r.setMonth(r.getMonth() + 1); return r;
+  }), []);
 
   const weekLabel = `${formatDateLabel(weekStart)} – ${formatDateLabel(weekEnd)} ${weekEnd.getFullYear()}`;
-  const isCurrentWeek = toDateStr(weekStart) === toDateStr(startOfWeek(new Date()));
+  const monthLabel = `${MONTH_NAMES[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+  const isCurrentWeek  = toDateStr(weekStart) === toDateStr(startOfWeek(new Date()));
+  const isCurrentMonth = currentDate.getFullYear() === new Date().getFullYear()
+                      && currentDate.getMonth()    === new Date().getMonth();
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* ── Toolbar ── */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white shrink-0 flex-wrap gap-2">
+        {/* Left: navigation (changes per view) */}
         <div className="flex items-center gap-2">
-          <button onClick={prevWeek}
-            className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors">
+          <button
+            onClick={viewMode === 'week' ? prevWeek : prevMonth}
+            className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors"
+          >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <button onClick={goToday} disabled={isCurrentWeek}
-            className="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors">
+          <button
+            onClick={goToday}
+            disabled={viewMode === 'week' ? isCurrentWeek : isCurrentMonth}
+            className="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors"
+          >
             Hoy
           </button>
-          <button onClick={nextWeek}
-            className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors">
+          <button
+            onClick={viewMode === 'week' ? nextWeek : nextMonth}
+            className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors"
+          >
             <ChevronRight className="w-4 h-4" />
           </button>
-          <span className="text-sm font-semibold text-slate-700 ml-1 capitalize">{weekLabel}</span>
+          <span className="text-sm font-semibold text-slate-700 ml-1 capitalize">
+            {viewMode === 'week' ? weekLabel : monthLabel}
+          </span>
         </div>
 
+        {/* Center: view toggle pill */}
+        <div className="flex items-center rounded-lg border border-slate-200 overflow-hidden text-xs font-medium">
+          {(['month', 'week'] as const).map((v, i) => (
+            <button
+              key={v}
+              onClick={() => setViewMode(v)}
+              className={cn(
+                'px-3 py-1.5 transition-colors',
+                i > 0 && 'border-l border-slate-200',
+                viewMode === v ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50',
+              )}
+            >
+              {v === 'month' ? 'Mes' : 'Semana'}
+            </button>
+          ))}
+        </div>
+
+        {/* Right: Nueva Cita */}
         <button
           onClick={() => { setSelectedDate(undefined); setShowCreate(true); }}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
@@ -527,9 +693,24 @@ export default function AppointmentsPage() {
         </button>
       </div>
 
-      {/* ── Calendar grid ── */}
+      {/* ── Calendar body ── */}
       <div className="flex-1 overflow-auto">
-        <div className="min-w-[680px]">
+
+        {/* ── Month view ── */}
+        {viewMode === 'month' && (
+          <div className="h-full min-h-[520px]">
+            <MonthGrid
+              year={currentDate.getFullYear()}
+              month={currentDate.getMonth()}
+              appointmentsByDate={buildAppointmentsByDate(apptList)}
+              onDayClick={(date) => { setCurrentDate(date); setViewMode('week'); }}
+              onChipClick={setViewing}
+            />
+          </div>
+        )}
+
+        {/* ── Week view ── */}
+        {viewMode === 'week' && <div className="min-w-[680px]">
           {/* Day headers */}
           <div className="grid border-b border-slate-200 bg-white sticky top-0 z-10"
             style={{ gridTemplateColumns: '52px repeat(7, 1fr)' }}>
@@ -629,10 +810,10 @@ export default function AppointmentsPage() {
               );
             })}
           </div>
-        </div>
+        </div>}
 
-        {/* Empty state */}
-        {apptList.length === 0 && (
+        {/* Empty state — week only */}
+        {viewMode === 'week' && apptList.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <CalendarDays className="w-10 h-10 text-slate-200 mb-3" />
             <p className="text-sm font-medium text-slate-400">Sin citas esta semana</p>
