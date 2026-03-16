@@ -16,9 +16,10 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     const newLeadsToday = parseInt(newLeadsRow[0].count, 10);
 
     const { rows: appointmentsRow } = await db.query(`
-      SELECT COUNT(*) as count FROM tasks
-      WHERE business_id = $1 AND status = 'pending'
-      AND created_at >= CURRENT_DATE - INTERVAL '7 days'
+      SELECT COUNT(*) as count FROM appointments
+      WHERE business_id = $1
+      AND date >= CURRENT_DATE
+      AND date < CURRENT_DATE + INTERVAL '7 days'
     `, [bid]);
     const appointmentsThisWeek = parseInt(appointmentsRow[0].count, 10);
 

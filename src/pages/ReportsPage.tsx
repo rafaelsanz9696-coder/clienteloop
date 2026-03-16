@@ -185,6 +185,65 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {/* Channel breakdown + avg response time */}
+      {data.channelBreakdown && data.channelBreakdown.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-white rounded-2xl border border-slate-100 p-5">
+            <h3 className="font-bold text-slate-800 mb-4">Leads por canal</h3>
+            <div className="space-y-3">
+              {data.channelBreakdown.map(({ channel, count }) => {
+                const pct = data.totalLeads > 0 ? Math.round((count / data.totalLeads) * 100) : 0;
+                return (
+                  <div key={channel}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className={cn('px-1.5 py-0.5 rounded font-medium', getChannelColor(channel))}>
+                        {getChannelLabel(channel)}
+                      </span>
+                      <span className="font-semibold text-slate-700">
+                        {count} <span className="text-slate-400 font-normal">({pct}%)</span>
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-1.5">
+                      <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {data.avgResponseMinutes !== null && (
+            <div className="bg-white rounded-2xl border border-slate-100 p-5 flex flex-col justify-between">
+              <h3 className="font-bold text-slate-800 mb-2">Tiempo de respuesta</h3>
+              <div>
+                <div className="text-4xl font-bold text-blue-600">
+                  {data.avgResponseMinutes < 60
+                    ? `${data.avgResponseMinutes} min`
+                    : `${Math.round(data.avgResponseMinutes / 60)}h`}
+                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  Promedio entre mensaje del cliente y primera respuesta del equipo o IA
+                </p>
+              </div>
+              <div className={cn(
+                'mt-3 text-xs font-medium rounded-lg px-3 py-2',
+                data.avgResponseMinutes <= 5
+                  ? 'text-emerald-700 bg-emerald-50'
+                  : data.avgResponseMinutes <= 30
+                  ? 'text-amber-700 bg-amber-50'
+                  : 'text-red-700 bg-red-50'
+              )}>
+                {data.avgResponseMinutes <= 5
+                  ? '🟢 Excelente — menos de 5 min'
+                  : data.avgResponseMinutes <= 30
+                  ? '🟡 Bueno — menos de 30 min'
+                  : '🔴 Mejorable — más de 30 min'}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Top contacts */}
       {data.topContacts.length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-100 p-5">

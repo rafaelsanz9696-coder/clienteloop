@@ -17,7 +17,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     const fromStr = from.toISOString();
     const toStr = to.toISOString();
 
-    const [totalLeads, pipelineFunnel, revenueResult, topContacts, chartResult] =
+    const [totalLeads, pipelineFunnel, revenueResult, topContacts, chartResult, channelResult, responseTimeResult] =
       await Promise.all([
         db.query(
           'SELECT COUNT(*) as count FROM contacts WHERE business_id = $1 AND created_at BETWEEN $2 AND $3',
@@ -53,6 +53,38 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
            ORDER BY day ASC`,
           [bid, fromStr, toStr],
         ),
+        // Channel breakdown: leads per channel in period
+        db.query(
+          `SELECT channel, COUNT(*) as count
+           FROM contacts
+           WHERE business_id = $1 AND created_at BETWEEN $2 AND $3
+           GROUP BY channel
+           ORDER BY count DESC`,
+          [bid, fromStr, toStr],
+        ),
+        // Average first-response time (minutes) per conversation in period
+        db.query(
+          `SELECT AVG(
+             EXTRACT(EPOCH FROM (m_reply.created_at - m_first.created_at)) / 60
+           ) as avg_minutes
+           FROM (
+             SELECT c.id as conv_id, MIN(m.created_at) as created_at
+             FROM messages m
+             JOIN conversations c ON c.id = m.conversation_id
+             WHERE c.business_id = $1
+               AND m.sender_type = 'client'
+               AND m.created_at BETWEEN $2 AND $3
+             GROUP BY c.id
+           ) m_first
+           JOIN LATERAL (
+             SELECT created_at FROM messages
+             WHERE conversation_id = m_first.conv_id
+               AND sender_type IN ('agent', 'ai')
+               AND created_at > m_first.created_at
+             ORDER BY created_at ASC LIMIT 1
+           ) m_reply ON true`,
+          [bid, fromStr, toStr],
+        ),
       ]);
 
     const funnel: Record<string, number> = { new: 0, in_progress: 0, closed: 0 };
@@ -65,6 +97,8 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     const conversionRate =
       totalDeals > 0 ? Math.round((funnel.closed / totalDeals) * 100) : 0;
 
+    const avgMin = responseTimeResult.rows[0]?.avg_minutes;
+
     res.json({
       totalLeads: Number(totalLeads.rows[0].count),
       revenue: Number(revenueResult.rows[0].total),
@@ -76,6 +110,11 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
         day: new Date(r.day).toLocaleDateString('es-MX', { month: 'short', day: 'numeric' }),
         leads: Number(r.leads),
       })),
+      channelBreakdown: channelResult.rows.map((r: any) => ({
+        channel: r.channel as string,
+        count: Number(r.count),
+      })),
+      avgResponseMinutes: avgMin != null ? Math.round(Number(avgMin)) : null,
     });
   } catch (err) {
     console.error(err);

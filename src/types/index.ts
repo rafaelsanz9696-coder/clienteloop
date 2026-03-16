@@ -171,6 +171,8 @@ export interface ReportData {
   funnel: { new: number; in_progress: number; closed: number };
   topContacts: { id: number; name: string; channel: string; total_value: number; deal_count: number }[];
   chartData: { day: string; leads: number }[];
+  channelBreakdown: { channel: string; count: number }[];
+  avgResponseMinutes: number | null;
 }
 
 export interface Appointment {
