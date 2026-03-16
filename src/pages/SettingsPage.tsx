@@ -21,7 +21,10 @@ const NICHOS = [
   { value: 'academia', label: 'Academia / Centro Educativo' },
   { value: 'taller', label: 'Taller Mecánico' },
   { value: 'courier', label: 'Courier / Mensajería' },
-  { value: 'agencia_ia', label: 'Agencia de IA / Automatización' },
+  { value: 'agencia_ia',   label: 'Agencia de IA / Automatización' },
+  { value: 'vidrieria',    label: 'Vidriería / Cristalería / Espejos' },
+  { value: 'carpinteria',  label: 'Carpintería / Ebanistería' },
+  { value: 'construccion', label: 'Construcción / Remodelación' },
 ];
 
 // ─── Channel config icons ────────────────────────────────────────────────────

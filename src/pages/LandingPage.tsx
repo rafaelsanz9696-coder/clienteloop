@@ -23,6 +23,9 @@ import {
   Settings,
   Plug,
   Sparkles,
+  AppWindow,
+  Hammer,
+  HardHat,
 } from 'lucide-react';
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
@@ -36,6 +39,9 @@ const nichos = [
   { icon: Wrench,         name: 'Taller mecanico',    desc: 'Reparaciones, presupuestos' },
   { icon: Truck,          name: 'Mensajeria',         desc: 'Envios, rastreo, tarifas' },
   { icon: Monitor,        name: 'Agencia digital',    desc: 'Servicios, portafolio, cotizaciones' },
+  { icon: AppWindow,      name: 'Vidriería',          desc: 'Vidrios, espejos, shower, instalación' },
+  { icon: Hammer,         name: 'Carpintería',        desc: 'Muebles, closets, puertas, cocinas' },
+  { icon: HardHat,        name: 'Construcción',       desc: 'Obras, remodelaciones, acabados' },
 ];
 
 const features = [

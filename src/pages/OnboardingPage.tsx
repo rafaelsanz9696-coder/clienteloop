@@ -14,7 +14,10 @@ const NICHOS = [
   { value: 'academia', label: 'Academia / Centro Educativo', emoji: '📚', context: 'cursos, inscripciones, costos, horarios de clases' },
   { value: 'taller', label: 'Taller Mecánico', emoji: '🔧', context: 'servicios de reparación, diagnóstico, presupuestos' },
   { value: 'courier', label: 'Courier / Mensajería', emoji: '📦', context: 'envíos, tarifas por zona, rastreo de paquetes' },
-  { value: 'agencia_ia', label: 'Agencia de IA / Automatización', emoji: '🤖', context: 'automatización de procesos, chatbots, servicios de IA' },
+  { value: 'agencia_ia',   label: 'Agencia de IA / Automatización',  emoji: '🤖', context: 'automatización de procesos, chatbots, servicios de IA' },
+  { value: 'vidrieria',   label: 'Vidriería / Cristalería',          emoji: '🪟', context: 'vidrios, espejos, shower enclosures, puertas y ventanas de vidrio' },
+  { value: 'carpinteria', label: 'Carpintería / Ebanistería',         emoji: '🪵', context: 'muebles a medida, closets, cocinas, puertas, madera y derivados' },
+  { value: 'construccion',label: 'Construcción / Remodelación',       emoji: '🏗️', context: 'construcción nueva, remodelaciones, ampliaciones, acabados' },
 ];
 
 const PLACEHOLDERS: Record<string, string> = {
@@ -26,7 +29,10 @@ const PLACEHOLDERS: Record<string, string> = {
   academia: 'Ej: Academia Futuro',
   taller: 'Ej: Taller Martínez',
   courier: 'Ej: Courier Express RD',
-  agencia_ia: 'Ej: AutomatizaLab',
+  agencia_ia:   'Ej: AutomatizaLab',
+  vidrieria:    'Ej: Miami Glass & Mirrors',
+  carpinteria:  'Ej: Carpintería Artesanal Pérez',
+  construccion: 'Ej: Construcciones López y Asociados',
 };
 
 const CONTEXT_PLACEHOLDERS: Record<string, string> = {
@@ -38,7 +44,10 @@ const CONTEXT_PLACEHOLDERS: Record<string, string> = {
   academia: 'Ej: Cursos de inglés, programación y diseño gráfico. Modalidades presencial y online. Duración: 3 meses, 2 horas por semana. Certificado al finalizar.',
   taller: 'Ej: Mecánica general, frenos, suspensión, alineación. Presupuesto gratis. Garantía de 30 días en mano de obra. Recibimos todos los modelos.',
   courier: 'Ej: Envíos dentro de la ciudad $150. Entregas el mismo día si reservas antes de las 12pm. Tarifas especiales para empresas.',
-  agencia_ia: 'Ej: Desarrollamos chatbots, automatizaciones con n8n y Make, integraciones con WhatsApp Business API. Proyectos desde $500 USD.',
+  agencia_ia:   'Ej: Desarrollamos chatbots, automatizaciones con n8n y Make, integraciones con WhatsApp Business API. Proyectos desde $500 USD.',
+  vidrieria:    'Ej: Shower enclosures frameless, espejos a medida, vidrio templado e impacto. Medición gratis en Miami-Dade. Garantía 1 año en instalación.',
+  carpinteria:  'Ej: Closets a medida en melamina y madera, cocinas integrales, muebles de sala. Fabricación en taller propio. Entrega e instalación incluidas. Garantía 2 años.',
+  construccion: 'Ej: Remodelaciones residenciales y comerciales en Miami-Dade. Gestionamos permisos. Equipo propio de albañilería, pisos y pintura. Presupuesto sin costo.',
 };
 
 const HOURS_OPTIONS = [

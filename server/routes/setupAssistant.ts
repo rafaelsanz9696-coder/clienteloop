@@ -52,7 +52,10 @@ router.post('/chat', async (req, res) => {
       academia: 'academia / centro educativo',
       taller: 'taller mecánico',
       courier: 'courier / mensajería',
-      agencia_ia: 'agencia de IA',
+      agencia_ia:   'agencia de IA',
+      vidrieria:    'vidriería / cristalería',
+      carpinteria:  'carpintería y ebanistería',
+      construccion: 'construcción y remodelación',
     };
 
     const nichoLabel = NICHO_LABELS[biz.nicho] || biz.nicho;
