@@ -228,8 +228,9 @@ export const api = {
       body: JSON.stringify({ messages }),
     }),
 
-  // AI Copilot — streaming via SSE
-  // Calls /api/ai/copilot/stream and fires handlers as events arrive.
+  // AI Copilot — streaming via SSE with non-streaming fallback.
+  // Tries /api/ai/copilot/stream first; if the connection fails OR the stream
+  // emits an error event before any text arrives, falls back to /api/ai/copilot.
   copilotStream: async (
     messages: Array<{ role: string; content: string }>,
     handlers: {
@@ -242,61 +243,81 @@ export const api = {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
 
-    const res = await fetch(`${BASE_URL}/ai/copilot/stream`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-business-id': String(_activeBusinessId),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ messages }),
-    });
+    const authHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-business-id': String(_activeBusinessId),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
 
-    if (!res.ok || !res.body) {
-      // Fallback to non-streaming endpoint when SSE fails (e.g. Railway proxy timeout)
+    // Non-streaming fallback — used when SSE is unavailable or errors before first token
+    const tryFallback = async () => {
       try {
         const fbRes = await fetch(`${BASE_URL}/ai/copilot`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-business-id': String(_activeBusinessId),
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
+          headers: authHeaders,
           body: JSON.stringify({ messages }),
         });
         const data = await fbRes.json();
         if (fbRes.ok && data.reply) {
           handlers.onDone?.({ toolsUsed: data.toolsUsed ?? [], pendingAction: data.pendingAction, reply: data.reply });
         } else {
-          handlers.onError?.(data.error ?? `HTTP ${res.status}`);
+          handlers.onError?.(data.error ?? 'Error del servidor');
         }
       } catch {
-        handlers.onError?.(`HTTP ${res.status}`);
+        handlers.onError?.('No se pudo conectar con el servidor');
       }
+    };
+
+    const res = await fetch(`${BASE_URL}/ai/copilot/stream`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({ messages }),
+    });
+
+    // SSE connection failed before headers — fallback immediately
+    if (!res.ok || !res.body) {
+      await tryFallback();
       return;
     }
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let receivedDelta = false; // true once first text token arrives
+    let finished = false;
 
-    while (true) {
+    while (!finished) {
       const { done, value } = await reader.read();
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
-      buffer = lines.pop() ?? ''; // keep last partial line in buffer
+      buffer = lines.pop() ?? '';
 
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue;
         try {
           const event = JSON.parse(line.slice(6));
-          if (event.type === 'tool_start') handlers.onToolStart?.(event.name);
-          else if (event.type === 'delta') handlers.onDelta?.(event.text);
-          else if (event.type === 'done') handlers.onDone?.(event);
-          else if (event.type === 'error') handlers.onError?.(event.message);
+          if (event.type === 'tool_start') {
+            handlers.onToolStart?.(event.name);
+          } else if (event.type === 'delta') {
+            receivedDelta = true;
+            handlers.onDelta?.(event.text);
+          } else if (event.type === 'done') {
+            handlers.onDone?.(event);
+            finished = true;
+          } else if (event.type === 'error') {
+            if (!receivedDelta) {
+              // No text shown yet — silently retry with non-streaming endpoint
+              await tryFallback();
+            } else {
+              // Partial content already displayed — show the error
+              handlers.onError?.(event.message);
+            }
+            finished = true;
+          }
         } catch { /* skip malformed line */ }
+        if (finished) break;
       }
     }
   },
