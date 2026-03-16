@@ -4,6 +4,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
   type ReactNode,
 } from 'react';
 import { api, setActiveBusinessId } from '../lib/api';
@@ -31,6 +32,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     return stored ? Number(stored) : 1;
   });
   const [loading, setLoading] = useState(true);
+  const initialLoadedRef = useRef(false);
 
   // Sync api.ts module variable and localStorage on every change
   useEffect(() => {
@@ -46,13 +48,19 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       // User logged out: clear businesses list
       setBusinesses([]);
       setLoading(false);
+      initialLoadedRef.current = false; // reset so next login shows spinner
       return;
     }
 
-    // User is authenticated: fetch their businesses
-    setLoading(true);
+    // Only show full-screen loading on first fetch; subsequent session refreshes
+    // (window focus, JWT renewal) refetch silently in the background.
+    if (!initialLoadedRef.current) {
+      setLoading(true);
+    }
+
     api.getBusinesses()
       .then((list) => {
+        initialLoadedRef.current = true;
         setBusinesses(list);
         // Guard: if stored id no longer belongs to this user, fall back to first
         const ids = list.map((b: Business) => b.id);
