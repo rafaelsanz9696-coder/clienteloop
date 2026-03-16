@@ -72,14 +72,14 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
              FROM messages m
              JOIN conversations c ON c.id = m.conversation_id
              WHERE c.business_id = $1
-               AND m.sender_type = 'client'
+               AND m.sender = 'client'
                AND m.created_at BETWEEN $2 AND $3
              GROUP BY c.id
            ) m_first
            JOIN LATERAL (
              SELECT created_at FROM messages
              WHERE conversation_id = m_first.conv_id
-               AND sender_type IN ('agent', 'ai')
+               AND sender IN ('agent', 'ai')
                AND created_at > m_first.created_at
              ORDER BY created_at ASC LIMIT 1
            ) m_reply ON true`,
