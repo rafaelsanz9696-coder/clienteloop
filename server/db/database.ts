@@ -288,6 +288,25 @@ export async function initDb() {
         created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
       CREATE UNIQUE INDEX IF NOT EXISTS idx_business_invitations_token ON business_invitations(token);
+
+      -- WhatsApp retry queue: persistent queue for failed Meta API sends
+      CREATE TABLE IF NOT EXISTS wa_retry_queue (
+        id              SERIAL PRIMARY KEY,
+        business_id     INT          NOT NULL,
+        conversation_id INT,
+        to_phone        VARCHAR(30)  NOT NULL,
+        content         TEXT         NOT NULL,
+        message_id      INT,
+        attempt_count   INT          DEFAULT 0,
+        max_attempts    INT          DEFAULT 3,
+        next_retry_at   TIMESTAMPTZ  DEFAULT NOW(),
+        last_error      TEXT,
+        status          VARCHAR(20)  DEFAULT 'pending',
+        created_at      TIMESTAMPTZ  DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_wa_retry_pending
+        ON wa_retry_queue (status, next_retry_at)
+        WHERE status = 'pending';
     `);
     console.log('[DB] PostgreSQL connected and schema initialized.');
   } catch (err) {

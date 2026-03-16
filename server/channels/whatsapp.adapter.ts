@@ -1,6 +1,7 @@
 import db from '../db/database.js';
 import { AutomationService } from '../lib/automation.js';
 import { getIo } from '../lib/socket.js';
+import { enqueueRetry } from '../lib/wa-retry.js';
 
 /**
  * Send a WhatsApp message directly to a phone number without a conversation.
@@ -121,11 +122,13 @@ export const WhatsAppAdapter = {
           if (!response.ok) {
             const errText = await response.text();
             console.error(`[WhatsApp API] Error ${response.status}:`, errText);
+            await enqueueRetry(bRows[0]?.business_id ?? null, conversationId, phone, text, newMsg.id);
           } else {
             console.log(`[WhatsApp API] Message dynamically sent to ${phone}`);
           }
         } catch (error) {
           console.error(`[WhatsApp API] Failed to send message:`, error);
+          await enqueueRetry(bRows[0]?.business_id ?? null, conversationId, phone, text, newMsg.id);
         }
       } else {
         console.warn(`[WhatsApp API] No phone number found for conversation ${conversationId}`);

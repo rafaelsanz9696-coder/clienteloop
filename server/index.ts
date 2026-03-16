@@ -41,6 +41,7 @@ import { requireAuth } from './middleware/auth.js';
 import { initSocket } from './lib/socket.js';
 import { initDb } from './db/database.js';
 import { checkAndSendReminders } from './lib/reminder-scheduler.js';
+import { processRetryQueue } from './lib/wa-retry.js';
 
 initDb().catch(console.error);
 
@@ -56,6 +57,18 @@ setTimeout(async () => {
   try { await checkAndSendReminders(); }
   catch (err) { console.error('[Scheduler] Startup check error:', err); }
 }, 10_000);
+
+// ─── WhatsApp retry queue (every 2 minutes) ───────────────────────────────────
+const RETRY_INTERVAL_MS = 2 * 60 * 1000;
+setInterval(async () => {
+  try { await processRetryQueue(); }
+  catch (err) { console.error('[RetryQueue] Scheduler error:', err); }
+}, RETRY_INTERVAL_MS);
+// Run once on startup after DB is ready
+setTimeout(async () => {
+  try { await processRetryQueue(); }
+  catch (err) { console.error('[RetryQueue] Startup error:', err); }
+}, 15_000);
 
 const app = express();
 const httpServer = createServer(app);
