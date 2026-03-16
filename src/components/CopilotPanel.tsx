@@ -5,7 +5,22 @@
  * owner operate the CRM via natural language using Anthropic tool use.
  */
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react';
+
+/** Renders **bold** markdown without adding external deps */
+function renderMarkdown(text: string): ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  if (parts.length === 1) return text;
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.startsWith('**') && part.endsWith('**')
+          ? <strong key={i}>{part.slice(2, -2)}</strong>
+          : <span key={i}>{part}</span>
+      )}
+    </>
+  );
+}
 import { Bot, X, Send, Loader2, Zap, CheckCircle2, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { api } from '../lib/api';
@@ -416,7 +431,7 @@ export default function CopilotPanel() {
                         : 'bg-blue-500 text-white rounded-tr-md',
                     )}
                   >
-                    {msg.content}
+                    {renderMarkdown(msg.content)}
                   </div>
                 )}
 

@@ -225,7 +225,7 @@ export default function DashboardPage() {
           </motion.div>
 
           {/* AI Setup Banner — shown when no memories configured yet */}
-          {memories !== undefined && memories.length === 0 && (
+          {Array.isArray(memories) && memories.length === 0 && (
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}

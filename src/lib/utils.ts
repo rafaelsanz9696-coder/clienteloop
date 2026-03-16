@@ -23,7 +23,7 @@ export function formatRelativeTime(dateStr: string | null | undefined): string {
 }
 
 export function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'USD' }).format(value);
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
 }
 
 export function getChannelLabel(channel: string): string {

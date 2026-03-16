@@ -1,10 +1,11 @@
-import { Menu, Search, Bell, User, Users, MessageSquare, Kanban, HelpCircle } from 'lucide-react';
+import { Menu, Search, Bell, User, Users, MessageSquare, Kanban, HelpCircle, LogOut } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import type { SearchResults } from '../../types/index';
 import { cn, getChannelColor, getChannelLabel, getStageColor, getStageLabel, formatCurrency } from '../../lib/utils';
 import { useSocket } from '../../contexts/SocketContext';
+import { useAuth } from '../../contexts/AuthContext';
 import HelpModal from '../HelpModal';
 
 interface TopBarProps {
@@ -21,11 +22,14 @@ export default function TopBar({ title, onMenuClick }: TopBarProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadConvs, setUnreadConvs] = useState<any[]>([]);
   const [loadingNotifs, setLoadingNotifs] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { totalUnread } = useSocket();
+  const { user, signOut } = useAuth();
 
   const hasResults = results && (
     results.contacts.length > 0 ||
@@ -62,6 +66,9 @@ export default function TopBar({ title, onMenuClick }: TopBarProps) {
       }
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
         setShowNotifications(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setShowProfile(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -262,8 +269,30 @@ export default function TopBar({ title, onMenuClick }: TopBarProps) {
             </div>
           )}
         </div>
-        <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
-          <User className="w-5 h-5 text-slate-400" />
+        <div ref={profileRef} className="relative">
+          <button
+            onClick={() => setShowProfile(v => !v)}
+            className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center border border-slate-200 transition-colors"
+            title="Mi perfil"
+          >
+            <User className="w-5 h-5 text-slate-400" />
+          </button>
+
+          {showProfile && (
+            <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">Sesión activa</p>
+                <p className="text-xs font-semibold text-slate-700 truncate mt-0.5">{user?.email}</p>
+              </div>
+              <button
+                onClick={async () => { await signOut(); setShowProfile(false); }}
+                className="w-full text-left flex items-center gap-2 px-4 py-3 text-sm text-red-500 hover:bg-red-50 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                Cerrar sesión
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
