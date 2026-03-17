@@ -82,7 +82,8 @@ router.patch('/:id/stage', async (req: AuthenticatedRequest, res) => {
       return res.status(400).json({ error: 'Invalid stage' });
     }
 
-    await db.query('UPDATE pipeline_deals SET stage=$1 WHERE id=$2', [stage, req.params.id]);
+    const bid = req.user!.business_id;
+    await db.query('UPDATE pipeline_deals SET stage=$1 WHERE id=$2 AND business_id=$3', [stage, req.params.id, bid]);
 
     const { rows } = await db.query(
       'SELECT pd.*, c.name as contact_name FROM pipeline_deals pd JOIN contacts c ON c.id = pd.contact_id WHERE pd.id=$1',
@@ -90,7 +91,6 @@ router.patch('/:id/stage', async (req: AuthenticatedRequest, res) => {
     );
     if (rows.length > 0) {
       await db.query('UPDATE contacts SET pipeline_stage=$1 WHERE id=$2', [stage, rows[0].contact_id]);
-      const bid = req.user!.business_id;
       logActivity(bid, rows[0].contact_id, 'deal_stage_changed',
         `Deal "${rows[0].title}" movido a ${STAGE_LABELS[stage] ?? stage}`);
     }
@@ -103,14 +103,16 @@ router.patch('/:id/stage', async (req: AuthenticatedRequest, res) => {
 });
 
 // PUT /api/pipeline/:id
-router.put('/:id', async (req, res) => {
+router.put('/:id', async (req: AuthenticatedRequest, res) => {
   try {
+    const bid = req.user!.business_id;
     const { title, stage, value, notes } = req.body;
     const { rows } = await db.query(
       `UPDATE pipeline_deals SET title=COALESCE($1,title), stage=COALESCE($2,stage),
-       value=COALESCE($3,value), notes=COALESCE($4,notes) WHERE id=$5 RETURNING *`,
-      [title, stage, value, notes, req.params.id],
+       value=COALESCE($3,value), notes=COALESCE($4,notes) WHERE id=$5 AND business_id=$6 RETURNING *`,
+      [title, stage, value, notes, req.params.id, bid],
     );
+    if (!rows[0]) return res.status(404).json({ error: 'Deal not found' });
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -119,9 +121,10 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/pipeline/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: AuthenticatedRequest, res) => {
   try {
-    await db.query('DELETE FROM pipeline_deals WHERE id=$1', [req.params.id]);
+    const bid = req.user!.business_id;
+    await db.query('DELETE FROM pipeline_deals WHERE id=$1 AND business_id=$2', [req.params.id, bid]);
     res.json({ success: true });
   } catch (err) {
     console.error(err);

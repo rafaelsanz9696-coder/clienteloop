@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { toast } from '../lib/toast';
 import {
   Megaphone, Plus, X, Send, Users, Tag, Kanban, Loader2,
   CheckCircle2, AlertCircle, Trash2, RefreshCw, ChevronRight,
@@ -51,14 +52,17 @@ function NewBroadcastModal({ onClose, onCreated }: NewBroadcastModalProps) {
   const [sending, setSending] = useState(false);
   const [doneId, setDoneId]   = useState<number | null>(null);
 
-  // Preview recipient count
+  // Preview recipient count — debounced 300ms to avoid firing on every keystroke
   useEffect(() => {
-    setLoadingCount(true);
-    const val = filterType !== 'all' ? filterValue : undefined;
-    api.previewBroadcastCount(filterType, val)
-      .then((r) => setRecipientCount(r.count))
-      .catch(() => setRecipientCount(null))
-      .finally(() => setLoadingCount(false));
+    const timer = setTimeout(() => {
+      setLoadingCount(true);
+      const val = filterType !== 'all' ? filterValue : undefined;
+      api.previewBroadcastCount(filterType, val)
+        .then((r) => setRecipientCount(r.count))
+        .catch(() => setRecipientCount(null))
+        .finally(() => setLoadingCount(false));
+    }, 300);
+    return () => clearTimeout(timer);
   }, [filterType, filterValue]);
 
   async function handleCreate(andSend: boolean) {
@@ -457,9 +461,10 @@ export default function BroadcastPage() {
   async function handleSend(id: number) {
     try {
       await api.sendBroadcast(id);
+      toast.success('Difusión enviada correctamente');
       refetch();
     } catch (err: any) {
-      alert(err.message ?? 'Error al enviar');
+      toast.error(err.message ?? 'Error al enviar');
     }
   }
 
@@ -467,9 +472,10 @@ export default function BroadcastPage() {
     if (!confirm('¿Eliminar esta difusión?')) return;
     try {
       await api.deleteBroadcast(id);
+      toast.success('Difusión eliminada');
       refetch();
     } catch (err: any) {
-      alert(err.message ?? 'Error al eliminar');
+      toast.error(err.message ?? 'Error al eliminar');
     }
   }
 

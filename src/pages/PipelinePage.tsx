@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from '../lib/toast';
 import { Plus, GripVertical, X, Trash2, DollarSign, Search } from 'lucide-react';
 import { cn, formatCurrency, getChannelColor, getChannelLabel } from '../lib/utils';
 import { api } from '../lib/api';
@@ -46,10 +47,11 @@ function CreateDealModal({
         stage,
         value: parseFloat(value) || 0,
       });
+      toast.success('Deal creado correctamente');
       onCreated();
       onClose();
     } catch (err: any) {
-      alert('Error: ' + (err.message || 'Intenta de nuevo'));
+      toast.error('Error: ' + (err.message || 'Intenta de nuevo'));
     } finally {
       setSaving(false);
     }
@@ -75,7 +77,7 @@ function CreateDealModal({
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {/* Contact picker */}
           <div>
-            <label className="text-sm font-medium text-slate-700 mb-1 block">
+            <label className="text-sm font-semibold text-slate-700 mb-1.5 block">
               Contacto <span className="text-red-500">*</span>
             </label>
             {selectedContact ? (
@@ -130,7 +132,7 @@ function CreateDealModal({
 
           {/* Title */}
           <div>
-            <label className="text-sm font-medium text-slate-700 mb-1 block">Título del deal</label>
+            <label className="text-sm font-semibold text-slate-700 mb-1.5 block">Título del deal</label>
             <input
               type="text"
               value={title}
@@ -143,7 +145,7 @@ function CreateDealModal({
           {/* Value + Stage */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">Valor ($)</label>
+              <label className="text-sm font-semibold text-slate-700 mb-1.5 block">Valor ($)</label>
               <div className="relative">
                 <DollarSign className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
@@ -158,7 +160,7 @@ function CreateDealModal({
               </div>
             </div>
             <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">Etapa inicial</label>
+              <label className="text-sm font-semibold text-slate-700 mb-1.5 block">Etapa inicial</label>
               <select
                 value={stage}
                 onChange={(e) => setStage(e.target.value as any)}

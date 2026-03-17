@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { toast } from '../lib/toast';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Search, Plus, Phone, Mail, X, ChevronLeft, MessageSquare,
@@ -852,9 +853,10 @@ export default function ContactsPage() {
                 if (confirm(`¿Eliminar a ${contact.name}?`)) {
                   try {
                     await api.deleteContact(contact.id);
+                    toast.success('Contacto eliminado');
                     refetch();
                   } catch {
-                    alert('No se pudo eliminar el contacto. Inténtalo de nuevo.');
+                    toast.error('No se pudo eliminar el contacto. Inténtalo de nuevo.');
                   }
                 }
                 setMenuOpen(null);

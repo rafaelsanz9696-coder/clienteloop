@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { toast } from '../lib/toast';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   MessageSquare,
@@ -371,7 +372,11 @@ function ConversationList({
       {/* List */}
       <div className="flex-1 overflow-y-auto">
         {filtered.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-8">Sin conversaciones</p>
+          <div className="flex flex-col items-center justify-center py-16 px-4 text-center text-slate-400">
+            <MessageSquare className="w-10 h-10 mb-3 opacity-40" />
+            <p className="text-sm font-medium text-slate-500">Sin conversaciones</p>
+            <p className="text-xs mt-1">Los mensajes entrantes aparecerán aquí</p>
+          </div>
         ) : (
           filtered.map((conv) => (
             <button
@@ -642,14 +647,14 @@ function ConversationThread({
             title: task.title,
             due_time: task.due_time || undefined
           });
-          alert('Tarea creada con éxito');
+          toast.success('Tarea creada con éxito');
         }
       } else {
-        alert('No se detectó ninguna tarea clara en los últimos mensajes.');
+        toast.info('No se detectó ninguna tarea clara en los últimos mensajes.');
       }
     } catch (err) {
       console.error(err);
-      alert('Error al extraer tarea.');
+      toast.error('Error al extraer tarea.');
     } finally {
       setTaskExtracting(false);
     }

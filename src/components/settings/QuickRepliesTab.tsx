@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from '../../lib/toast';
 import { Plus, Trash2, Edit2, Zap } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useApi } from '../../hooks/useApi';
@@ -26,9 +27,10 @@ export default function QuickRepliesTab() {
             setAdding(false);
             setEditingId(null);
             setForm({ title: '', content: '', category: 'general' });
+            toast.success(editingId ? 'Plantilla actualizada' : 'Plantilla creada');
             refetch();
         } catch (err: any) {
-            alert('Error: ' + (err.message || 'Intenta de nuevo'));
+            toast.error('Error: ' + (err.message || 'Intenta de nuevo'));
         } finally {
             setSaving(false);
         }
@@ -44,9 +46,10 @@ export default function QuickRepliesTab() {
         if (!confirm('¿Eliminar esta plantilla?')) return;
         try {
             await api.deleteQuickReply(id);
+            toast.success('Plantilla eliminada');
             refetch();
         } catch (err) {
-            alert('Error al eliminar');
+            toast.error('Error al eliminar');
         }
     }
 

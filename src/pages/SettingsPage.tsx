@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { toast } from '../lib/toast';
 import { useSearchParams } from 'react-router-dom';
 import { Save, CheckCircle2, History, Upload, Sparkles, X, Plus, Trash2, MessageSquare, Mail, Phone, CalendarDays, Edit2, Link, Copy, ExternalLink, Users2, UserPlus, Shield, Crown, UserX, ChevronDown } from 'lucide-react';
 import { cn, formatRelativeTime } from '../lib/utils';
@@ -49,12 +50,13 @@ function ChannelsTab() {
     setSaving(true);
     try {
       await api.saveChannelNumber({ channel: newChannel, identifier: newIdentifier.trim(), label: newLabel.trim() });
+      toast.success('Canal guardado');
       setNewIdentifier('');
       setNewLabel('');
       setAdding(false);
       refetch();
     } catch (err: any) {
-      alert('Error: ' + (err.message || 'Intenta de nuevo'));
+      toast.error('Error: ' + (err.message || 'Intenta de nuevo'));
     } finally {
       setSaving(false);
     }
@@ -187,9 +189,10 @@ function ServicesTab() {
       } else {
         await api.createService(data);
       }
+      toast.success(editingId ? 'Servicio actualizado' : 'Servicio creado');
       resetForm();
       refetch();
-    } catch (err: any) { alert('Error: ' + (err.message || 'Intenta de nuevo')); }
+    } catch (err: any) { toast.error('Error: ' + (err.message || 'Intenta de nuevo')); }
     finally { setSaving(false); }
   }
 
@@ -457,7 +460,7 @@ function TeamTab() {
       setInviteLink(result.link);
       refetchInvites();
     } catch (err: any) {
-      alert('Error: ' + (err.message || 'Intenta de nuevo'));
+      toast.error('Error: ' + (err.message || 'Intenta de nuevo'));
       setShowInviteModal(false);
     } finally {
       setInviting(false);
@@ -473,10 +476,11 @@ function TeamTab() {
   async function handleRoleChange(memberId: number, role: 'admin' | 'agent') {
     try {
       await api.updateMemberRole(memberId, role);
+      toast.success('Rol actualizado');
       setRoleMenuId(null);
       refetch();
     } catch (err: any) {
-      alert('Error: ' + err.message);
+      toast.error('Error: ' + err.message);
     }
   }
 
@@ -484,18 +488,20 @@ function TeamTab() {
     if (!confirm(`¿Remover a ${email} del equipo?`)) return;
     try {
       await api.removeMember(memberId);
+      toast.success(`${email} removido del equipo`);
       refetch();
     } catch (err: any) {
-      alert('Error: ' + err.message);
+      toast.error('Error: ' + err.message);
     }
   }
 
   async function handleRevokeInvite(id: number) {
     try {
       await api.revokeInvitation(id);
+      toast.success('Invitación revocada');
       refetchInvites();
     } catch (err: any) {
-      alert('Error: ' + err.message);
+      toast.error('Error: ' + err.message);
     }
   }
 
@@ -813,7 +819,7 @@ export default function SettingsPage() {
     // 5 MB limit — WhatsApp exports are rarely larger than 1 MB without media
     const MAX_BYTES = 5 * 1024 * 1024;
     if (file.size > MAX_BYTES) {
-      alert('El archivo es muy grande. Exporta el chat sin archivos adjuntos (máximo 5 MB).');
+      toast.error('Archivo muy grande. Exporta el chat sin adjuntos (máx. 5 MB).');
       e.target.value = '';
       return;
     }
@@ -850,7 +856,7 @@ export default function SettingsPage() {
       setStyleProfile(result.styleProfile);
       setTrainStatus('preview');
     } catch (err: any) {
-      alert('Error al analizar los chats: ' + (err.message || 'Intenta de nuevo'));
+      toast.error('Error al analizar los chats: ' + (err.message || 'Intenta de nuevo'));
       setTrainStatus('idle');
     }
   }
@@ -874,7 +880,7 @@ export default function SettingsPage() {
         setChatStats(null);
       }, 3500);
     } catch (err: any) {
-      alert('Error al guardar el perfil: ' + (err.message || 'Intenta de nuevo'));
+      toast.error('Error al guardar el perfil: ' + (err.message || 'Intenta de nuevo'));
     }
   }
 

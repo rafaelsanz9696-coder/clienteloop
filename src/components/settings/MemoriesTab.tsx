@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from '../../lib/toast';
 import {
     Brain,
     Plus,
@@ -104,11 +105,12 @@ export default function MemoriesTab() {
                 content: form.content.trim(),
                 relevance: form.relevance,
             });
+            toast.success('Memoria guardada');
             setForm({ type: 'faq', content: '', relevance: 5 });
             setShowForm(false);
             refetch();
         } catch (err: any) {
-            alert('Error: ' + (err.message || 'Intenta de nuevo'));
+            toast.error('Error: ' + (err.message || 'Intenta de nuevo'));
         } finally {
             setSaving(false);
         }

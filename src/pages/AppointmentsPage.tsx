@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { toast } from '../lib/toast';
 import {
   ChevronLeft, ChevronRight, Plus, X, Loader2, CalendarDays,
   CheckCircle2, XCircle, Clock, Trash2, Edit2, User, Wrench, Smartphone,
@@ -369,9 +370,9 @@ function CreateAppointmentModal({ onClose, onCreated, defaultDate }: CreateModal
               <label className="text-xs font-medium text-slate-600 mb-1 block">Duración (min)</label>
               <input
                 type="number"
-                min={15} step={15}
+                min={15} max={480} step={15}
                 value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
+                onChange={(e) => setDuration(Math.min(480, Math.max(15, Number(e.target.value))))}
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -475,13 +476,14 @@ function ViewAppointmentModal({ appointment, onClose, onRefresh }: ViewModalProp
     try {
       const result = await api.sendReminder(appointment.id);
       if (result.sent) {
+        toast.success('Recordatorio enviado');
         setReminderSentAt(result.appointment?.reminder_sent_at ?? new Date().toISOString());
         onRefresh();
       } else {
-        alert(`No se pudo enviar el recordatorio: ${result.reason}`);
+        toast.error(`No se pudo enviar el recordatorio: ${result.reason}`);
       }
     } catch (err: any) {
-      alert(err.message ?? 'Error al enviar recordatorio');
+      toast.error(err.message ?? 'Error al enviar recordatorio');
     } finally {
       setActing('');
     }

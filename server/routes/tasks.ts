@@ -60,9 +60,10 @@ router.post('/', async (req: AuthenticatedRequest, res) => {
 // PATCH /api/tasks/:id/done
 router.patch('/:id/done', async (_req: AuthenticatedRequest, res) => {
   try {
+    const bid = _req.user!.business_id;
     const { rows } = await db.query(
-      "UPDATE tasks SET status='done' WHERE id=$1 RETURNING *",
-      [_req.params.id],
+      "UPDATE tasks SET status='done' WHERE id=$1 AND business_id=$2 RETURNING *",
+      [_req.params.id, bid],
     );
     const task = rows[0];
     if (task) {
@@ -76,9 +77,10 @@ router.patch('/:id/done', async (_req: AuthenticatedRequest, res) => {
 });
 
 // DELETE /api/tasks/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: AuthenticatedRequest, res) => {
   try {
-    await db.query('DELETE FROM tasks WHERE id=$1', [req.params.id]);
+    const bid = req.user!.business_id;
+    await db.query('DELETE FROM tasks WHERE id=$1 AND business_id=$2', [req.params.id, bid]);
     res.json({ success: true });
   } catch (err) {
     console.error(err);

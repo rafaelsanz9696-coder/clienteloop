@@ -41,9 +41,10 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
 });
 
 // GET /api/contacts/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req: AuthenticatedRequest, res) => {
   try {
-    const { rows } = await db.query('SELECT * FROM contacts WHERE id = $1', [req.params.id]);
+    const bid = req.user!.business_id;
+    const { rows } = await db.query('SELECT * FROM contacts WHERE id=$1 AND business_id=$2', [req.params.id, bid]);
     if (rows.length === 0) return res.status(404).json({ error: 'Contact not found' });
     res.json(rows[0]);
   } catch (err) {
@@ -74,8 +75,9 @@ router.post('/', async (req: AuthenticatedRequest, res) => {
 });
 
 // PUT /api/contacts/:id
-router.put('/:id', async (req, res) => {
+router.put('/:id', async (req: AuthenticatedRequest, res) => {
   try {
+    const bid = req.user!.business_id;
     const { name, phone, email, channel, pipeline_stage, status, notes, tags } = req.body;
     const { rows } = await db.query(`
       UPDATE contacts
@@ -83,9 +85,10 @@ router.put('/:id', async (req, res) => {
           channel=COALESCE($4,channel), pipeline_stage=COALESCE($5,pipeline_stage),
           status=COALESCE($6,status), notes=COALESCE($7,notes), tags=COALESCE($8,tags),
           last_contact_at=CURRENT_TIMESTAMP
-      WHERE id=$9 RETURNING *
-    `, [name, phone, email, channel, pipeline_stage, status, notes, tags, req.params.id]);
+      WHERE id=$9 AND business_id=$10 RETURNING *
+    `, [name, phone, email, channel, pipeline_stage, status, notes, tags, req.params.id, bid]);
 
+    if (!rows[0]) return res.status(404).json({ error: 'Contact not found' });
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -94,10 +97,14 @@ router.put('/:id', async (req, res) => {
 });
 
 // PATCH /api/contacts/:id/stage
-router.patch('/:id/stage', async (req, res) => {
+router.patch('/:id/stage', async (req: AuthenticatedRequest, res) => {
   try {
+    const bid = req.user!.business_id;
     const { stage } = req.body;
-    await db.query('UPDATE contacts SET pipeline_stage=$1, last_contact_at=CURRENT_TIMESTAMP WHERE id=$2', [stage, req.params.id]);
+    await db.query(
+      'UPDATE contacts SET pipeline_stage=$1, last_contact_at=CURRENT_TIMESTAMP WHERE id=$2 AND business_id=$3',
+      [stage, req.params.id, bid],
+    );
     res.json({ success: true });
   } catch (err) {
     console.error(err);
