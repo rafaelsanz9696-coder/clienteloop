@@ -106,9 +106,14 @@ router.patch('/:id/stage', async (req, res) => {
 });
 
 // DELETE /api/contacts/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: AuthenticatedRequest, res) => {
   try {
-    await db.query('DELETE FROM contacts WHERE id=$1', [req.params.id]);
+    const bid = req.user!.business_id;
+    const id = req.params.id;
+    // Cascade manually: remove FK-blocked rows before deleting the contact
+    await db.query('DELETE FROM pipeline_deals WHERE contact_id=$1', [id]);
+    await db.query('DELETE FROM conversations WHERE contact_id=$1', [id]); // messages cascade from conversations
+    await db.query('DELETE FROM contacts WHERE id=$1 AND business_id=$2', [id, bid]);
     res.json({ success: true });
   } catch (err) {
     console.error(err);

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
 import DashboardPage from './pages/DashboardPage';
@@ -11,7 +12,7 @@ import AppointmentsPage from './pages/AppointmentsPage';
 import BroadcastPage from './pages/BroadcastPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
-import LandingPage from './pages/LandingPage';
+const LandingPage = lazy(() => import('./pages/LandingPage'));
 import BookingPage from './pages/BookingPage';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 import OnboardingPage from './pages/OnboardingPage';
@@ -36,7 +37,11 @@ export default function App() {
   return (
     <Routes>
       {/* Public landing page — SEO-friendly */}
-      <Route index element={user ? <Navigate to="/app" replace /> : <LandingPage />} />
+      <Route index element={user ? <Navigate to="/app" replace /> : (
+        <Suspense fallback={<div className="min-h-screen bg-slate-950" />}>
+          <LandingPage />
+        </Suspense>
+      )} />
 
       {/* Public auth routes — redirect logged-in users to dashboard */}
       <Route path="/login" element={user ? <Navigate to="/app" replace /> : <LoginPage />} />

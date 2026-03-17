@@ -849,7 +849,14 @@ export default function ContactsPage() {
               </button>
               <div className="border-t border-slate-100 my-1" />
               <button onClick={async () => {
-                if (confirm(`¿Eliminar a ${contact.name}?`)) { await api.deleteContact(contact.id); refetch(); }
+                if (confirm(`¿Eliminar a ${contact.name}?`)) {
+                  try {
+                    await api.deleteContact(contact.id);
+                    refetch();
+                  } catch {
+                    alert('No se pudo eliminar el contacto. Inténtalo de nuevo.');
+                  }
+                }
                 setMenuOpen(null);
               }} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors">
                 <Trash2 className="w-4 h-4" /> Eliminar

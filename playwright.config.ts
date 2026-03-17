@@ -9,7 +9,7 @@ export default defineConfig({
     reporter: 'html',
     use: {
         // Both apps run on localhost during dev
-        baseURL: 'http://localhost:3000',
+        baseURL: 'http://localhost:4000',
         trace: 'on-first-retry',
     },
     projects: [
@@ -21,7 +21,7 @@ export default defineConfig({
     // Wait for the dev server to start before running tests
     webServer: {
         command: 'npm run dev',
-        url: 'http://localhost:3000',
+        url: 'http://localhost:4000',
         reuseExistingServer: !process.env.CI,
         timeout: 120 * 1000,
     },

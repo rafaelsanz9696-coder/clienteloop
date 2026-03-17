@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import BottomNav from './BottomNav';
-import CopilotPanel from '../CopilotPanel';
+
+const CopilotPanel = lazy(() => import('../CopilotPanel'));
 
 const pageTitles: Record<string, string> = {
   '/': 'Dashboard',
@@ -39,7 +40,7 @@ export default function AppLayout() {
       {/* Mobile bottom navigation */}
       <BottomNav onMenuClick={() => setSidebarOpen(true)} />
 
-      <CopilotPanel />
+      <Suspense fallback={null}><CopilotPanel /></Suspense>
     </div>
   );
 }
