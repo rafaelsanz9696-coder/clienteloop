@@ -8,7 +8,7 @@ function getPool() {
 
   return new Pool({
     connectionString,
-    ...(needsSsl ? { ssl: { rejectUnauthorized: true } } : {}),
+    ...(needsSsl ? { ssl: { rejectUnauthorized: false } } : {}),
   });
 }
 
