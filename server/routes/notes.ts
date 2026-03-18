@@ -8,12 +8,14 @@ const router = Router();
 // GET /api/notes?contact_id=X
 router.get('/', async (req: AuthenticatedRequest, res) => {
   try {
+    const bid = req.user!.business_id;
     const { contact_id } = req.query;
     if (!contact_id) return res.status(400).json({ error: 'contact_id is required' });
 
+    // Security: filter by business_id to prevent cross-tenant note leakage
     const { rows } = await db.query(
-      'SELECT * FROM contact_notes WHERE contact_id = $1 ORDER BY created_at DESC',
-      [contact_id],
+      'SELECT * FROM contact_notes WHERE contact_id = $1 AND business_id = $2 ORDER BY created_at DESC',
+      [contact_id, bid],
     );
     res.json(rows);
   } catch (err) {
@@ -49,9 +51,10 @@ router.post('/', async (req: AuthenticatedRequest, res) => {
 });
 
 // DELETE /api/notes/:id
-router.delete('/:id', async (_req, res) => {
+router.delete('/:id', async (req: AuthenticatedRequest, res) => {
   try {
-    await db.query('DELETE FROM contact_notes WHERE id = $1', [_req.params.id]);
+    const bid = req.user!.business_id;
+    await db.query('DELETE FROM contact_notes WHERE id = $1 AND business_id = $2', [req.params.id, bid]);
     res.json({ success: true });
   } catch (err) {
     console.error(err);

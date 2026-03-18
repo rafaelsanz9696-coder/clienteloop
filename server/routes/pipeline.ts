@@ -57,6 +57,13 @@ router.post('/', async (req: AuthenticatedRequest, res) => {
     const { contact_id, title, stage = 'new', value = 0, notes = '' } = req.body;
     if (!contact_id || !title) return res.status(400).json({ error: 'contact_id and title are required' });
 
+    // Security: verify contact belongs to this business before creating deal
+    const { rows: contactCheck } = await db.query(
+      'SELECT id FROM contacts WHERE id = $1 AND business_id = $2',
+      [contact_id, business_id],
+    );
+    if (contactCheck.length === 0) return res.status(400).json({ error: 'Invalid contact_id' });
+
     const { rows } = await db.query(
       `INSERT INTO pipeline_deals (business_id, contact_id, title, stage, value, notes)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,

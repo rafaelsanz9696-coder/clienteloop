@@ -28,9 +28,13 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
 });
 
 // GET /api/quick-replies/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req: AuthenticatedRequest, res) => {
   try {
-    const { rows } = await db.query('SELECT * FROM quick_replies WHERE id = $1', [req.params.id]);
+    const bid = req.user!.business_id;
+    const { rows } = await db.query(
+      'SELECT * FROM quick_replies WHERE id = $1 AND business_id = $2',
+      [req.params.id, bid],
+    );
     if (rows.length === 0) return res.status(404).json({ error: 'Quick reply not found' });
     res.json(rows[0]);
   } catch (err) {
@@ -59,13 +63,15 @@ router.post('/', async (req: AuthenticatedRequest, res) => {
 });
 
 // PUT /api/quick-replies/:id
-router.put('/:id', async (req, res) => {
+router.put('/:id', async (req: AuthenticatedRequest, res) => {
   try {
+    const bid = req.user!.business_id;
     const { title, content, category } = req.body;
     const { rows } = await db.query(
-      'UPDATE quick_replies SET title=COALESCE($1,title), content=COALESCE($2,content), category=COALESCE($3,category) WHERE id=$4 RETURNING *',
-      [title, content, category, req.params.id]
+      'UPDATE quick_replies SET title=COALESCE($1,title), content=COALESCE($2,content), category=COALESCE($3,category) WHERE id=$4 AND business_id=$5 RETURNING *',
+      [title, content, category, req.params.id, bid]
     );
+    if (!rows[0]) return res.status(404).json({ error: 'Quick reply not found' });
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -74,9 +80,10 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/quick-replies/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: AuthenticatedRequest, res) => {
   try {
-    await db.query('DELETE FROM quick_replies WHERE id = $1', [req.params.id]);
+    const bid = req.user!.business_id;
+    await db.query('DELETE FROM quick_replies WHERE id = $1 AND business_id = $2', [req.params.id, bid]);
     res.json({ success: true });
   } catch (err) {
     console.error(err);

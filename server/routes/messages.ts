@@ -2,14 +2,23 @@ import { Router } from 'express';
 import db from '../db/database.js';
 import { getIo } from '../lib/socket.js';
 import { sendChannelMessage } from '../channels/channel-router.js';
+import type { AuthenticatedRequest } from '../middleware/auth.js';
 
 const router = Router();
 
 // GET /api/messages?conversation_id=1
-router.get('/', async (req, res) => {
+router.get('/', async (req: AuthenticatedRequest, res) => {
   try {
+    const bid = req.user!.business_id;
     const convId = req.query.conversation_id;
     if (!convId) return res.status(400).json({ error: 'conversation_id is required' });
+
+    // Security: verify conversation belongs to this business before returning messages
+    const { rows: convCheck } = await db.query(
+      'SELECT id FROM conversations WHERE id = $1 AND business_id = $2',
+      [convId, bid],
+    );
+    if (convCheck.length === 0) return res.status(404).json({ error: 'Conversation not found' });
 
     const { rows: messages } = await db.query(`
       SELECT * FROM messages
@@ -25,12 +34,20 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/messages  — send a message
-router.post('/', async (req, res) => {
+router.post('/', async (req: AuthenticatedRequest, res) => {
   try {
+    const bid = req.user!.business_id;
     const { conversation_id, content, sender = 'agent', is_ai_generated = false } = req.body;
     if (!conversation_id || !content) {
       return res.status(400).json({ error: 'conversation_id and content are required' });
     }
+
+    // Security: verify conversation belongs to this business before inserting
+    const { rows: convCheck } = await db.query(
+      'SELECT id FROM conversations WHERE id = $1 AND business_id = $2',
+      [conversation_id, bid],
+    );
+    if (convCheck.length === 0) return res.status(404).json({ error: 'Conversation not found' });
 
     const { rows: newMsg } = await db.query(`
       INSERT INTO messages (conversation_id, content, sender, is_ai_generated)
@@ -51,13 +68,10 @@ router.post('/', async (req, res) => {
       WHERE id = (SELECT contact_id FROM conversations WHERE id = $1)
     `, [conversation_id]);
 
-    const { rows: bRows } = await db.query('SELECT business_id FROM conversations WHERE id = $1', [conversation_id]);
-    if (bRows.length > 0) {
-      getIo().to(`business_${bRows[0].business_id}`).emit('new_message', {
-        conversation_id: conversation_id,
-        message: newMsg[0]
-      });
-    }
+    getIo().to(`business_${bid}`).emit('new_message', {
+      conversation_id: conversation_id,
+      message: newMsg[0]
+    });
 
     res.status(201).json(newMsg[0]);
 

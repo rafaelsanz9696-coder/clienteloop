@@ -84,15 +84,16 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
 });
 
 // GET /api/conversations/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req: AuthenticatedRequest, res) => {
   try {
+    const bid = req.user!.business_id;
     const { rows } = await db.query(`
       SELECT c.*, ct.name as contact_name, ct.phone as contact_phone,
              ct.channel as contact_channel, ct.pipeline_stage, ct.notes as contact_notes
       FROM conversations c
       JOIN contacts ct ON ct.id = c.contact_id
-      WHERE c.id = $1
-    `, [req.params.id]);
+      WHERE c.id = $1 AND c.business_id = $2
+    `, [req.params.id, bid]);
 
     if (rows.length === 0) return res.status(404).json({ error: 'Conversation not found' });
     res.json(rows[0]);
@@ -122,10 +123,11 @@ router.post('/', async (req: AuthenticatedRequest, res) => {
 });
 
 // PATCH /api/conversations/:id/status
-router.patch('/:id/status', async (req, res) => {
+router.patch('/:id/status', async (req: AuthenticatedRequest, res) => {
   try {
+    const bid = req.user!.business_id;
     const { status } = req.body;
-    await db.query('UPDATE conversations SET status=$1 WHERE id=$2', [status, req.params.id]);
+    await db.query('UPDATE conversations SET status=$1 WHERE id=$2 AND business_id=$3', [status, req.params.id, bid]);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -134,9 +136,10 @@ router.patch('/:id/status', async (req, res) => {
 });
 
 // PATCH /api/conversations/:id/read
-router.patch('/:id/read', async (req, res) => {
+router.patch('/:id/read', async (req: AuthenticatedRequest, res) => {
   try {
-    await db.query('UPDATE conversations SET unread_count=0 WHERE id=$1', [req.params.id]);
+    const bid = req.user!.business_id;
+    await db.query('UPDATE conversations SET unread_count=0 WHERE id=$1 AND business_id=$2', [req.params.id, bid]);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -145,10 +148,11 @@ router.patch('/:id/read', async (req, res) => {
 });
 
 // PATCH /api/conversations/:id/assign
-router.patch('/:id/assign', async (req, res) => {
+router.patch('/:id/assign', async (req: AuthenticatedRequest, res) => {
   try {
+    const bid = req.user!.business_id;
     const { assigned_to } = req.body;
-    await db.query('UPDATE conversations SET assigned_to=$1 WHERE id=$2', [assigned_to, req.params.id]);
+    await db.query('UPDATE conversations SET assigned_to=$1 WHERE id=$2 AND business_id=$3', [assigned_to, req.params.id, bid]);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -159,9 +163,10 @@ router.patch('/:id/assign', async (req, res) => {
 // PATCH /api/conversations/:id/intent — set intent label manually
 router.patch('/:id/intent', async (req: AuthenticatedRequest, res) => {
   try {
+    const bid = req.user!.business_id;
     const { intent_label } = req.body;
     const label = typeof intent_label === 'string' ? intent_label.trim().slice(0, 100) : null;
-    await db.query('UPDATE conversations SET intent_label=$1 WHERE id=$2', [label || null, req.params.id]);
+    await db.query('UPDATE conversations SET intent_label=$1 WHERE id=$2 AND business_id=$3', [label || null, req.params.id, bid]);
     res.json({ success: true, intent_label: label || null });
   } catch (err) {
     console.error(err);

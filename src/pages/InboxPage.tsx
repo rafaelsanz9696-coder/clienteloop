@@ -979,6 +979,7 @@ export default function InboxPage() {
           <div className="flex-1">
             <ErrorBoundary>
               <ConversationThread
+                key={selectedId}
                 conversationId={selectedId}
                 onBack={() => navigate('/app/inbox')}
               />

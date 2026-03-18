@@ -1,9 +1,8 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import db from '../db/database.js';
 import { AutomationService } from '../lib/automation.js';
 import { getIo } from '../lib/socket.js';
 import crypto from 'crypto';
-import fs from 'fs';
 
 const router = Router();
 
@@ -11,7 +10,7 @@ const router = Router();
 
 function verifyInfobipSignature(req: any): boolean {
   const secret = process.env.INFOBIP_WEBHOOK_SECRET;
-  if (!secret) return true; // Skip verification if no secret configured (dev mode)
+  if (!secret) return false; // Require secret — fail closed, not open
 
   const signature = req.headers['x-hub-signature'] || req.headers['x-infobip-signature'];
   if (!signature) return false;
@@ -160,51 +159,78 @@ router.get('/meta/whatsapp', (req, res) => {
 });
 
 // ─── Meta WhatsApp Cloud API — Receiving Messages ───────────────────────────
+// Uses express.raw() to capture raw body for HMAC-SHA256 signature verification
 
-router.post('/meta/whatsapp', async (req, res) => {
-  try {
-    const body = req.body;
-    console.log('[Meta Webhook POST] Payload arriving:', JSON.stringify(body, null, 2));
-
-    if (body.object !== 'whatsapp_business_account') {
-      return res.sendStatus(200);
-    }
-
-    // Always return 200 immediately to Meta so they don't retry
-    res.sendStatus(200);
-
-    for (const entry of body.entry) {
-      for (const change of entry.changes) {
-        if (change.value && change.value.messages && change.value.messages[0]) {
-          const message = change.value.messages[0];
-          const contact = change.value.contacts[0];
-          const phoneId = change.value.metadata.phone_number_id;
-
-          // Resolve business by phoneId from DB
-          const businessId = await resolveBusinessId('whatsapp', phoneId);
-
-          if (!businessId) {
-            console.warn(`[Meta Webhook] No business mapped for Phone ID ${phoneId} — ignoring.`);
-            continue;
+router.post('/meta/whatsapp',
+  express.raw({ type: 'application/json' }),
+  async (req, res) => {
+    try {
+      // Verify X-Hub-Signature-256 if META_APP_SECRET is configured
+      const metaSecret = process.env.META_APP_SECRET;
+      if (metaSecret) {
+        const sig = req.headers['x-hub-signature-256'] as string | undefined;
+        if (!sig) {
+          console.warn('[Meta Webhook] Missing X-Hub-Signature-256 — ignoring payload');
+          return res.sendStatus(200);
+        }
+        const expected = 'sha256=' + crypto.createHmac('sha256', metaSecret)
+          .update(req.body)
+          .digest('hex');
+        try {
+          if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+            console.warn('[Meta Webhook] Invalid X-Hub-Signature-256 — ignoring payload');
+            return res.sendStatus(200);
           }
-
-          const fromPhone = message.from;
-          const text = message.text?.body;
-          const name = contact.profile?.name || fromPhone;
-
-          if (!text) {
-            console.log('[Meta Webhook] Received non-text message. Ignoring for now.');
-            continue;
-          }
-
-          await processIncomingMessage(businessId, fromPhone, null, name, text, 'whatsapp');
+        } catch {
+          console.warn('[Meta Webhook] Signature comparison failed — ignoring payload');
+          return res.sendStatus(200);
         }
       }
+
+      // Parse raw body to JSON
+      const body = JSON.parse(req.body.toString());
+      console.log('[Meta Webhook POST] Payload arriving:', JSON.stringify(body, null, 2));
+
+      if (body.object !== 'whatsapp_business_account') {
+        return res.sendStatus(200);
+      }
+
+      // Always return 200 immediately to Meta so they don't retry
+      res.sendStatus(200);
+
+      for (const entry of body.entry) {
+        for (const change of entry.changes) {
+          if (change.value && change.value.messages && change.value.messages[0]) {
+            const message = change.value.messages[0];
+            const contact = change.value.contacts[0];
+            const phoneId = change.value.metadata.phone_number_id;
+
+            // Resolve business by phoneId from DB
+            const businessId = await resolveBusinessId('whatsapp', phoneId);
+
+            if (!businessId) {
+              console.warn(`[Meta Webhook] No business mapped for Phone ID ${phoneId} — ignoring.`);
+              continue;
+            }
+
+            const fromPhone = message.from;
+            const text = message.text?.body;
+            const name = contact.profile?.name || fromPhone;
+
+            if (!text) {
+              console.log('[Meta Webhook] Received non-text message. Ignoring for now.');
+              continue;
+            }
+
+            await processIncomingMessage(businessId, fromPhone, null, name, text, 'whatsapp');
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[Meta Webhook Error]', err);
+      if (!res.headersSent) res.sendStatus(500);
     }
-  } catch (err) {
-    console.error('[Meta Webhook Error]', err);
-    if (!res.headersSent) res.sendStatus(500);
   }
-});
+);
 
 export default router;
