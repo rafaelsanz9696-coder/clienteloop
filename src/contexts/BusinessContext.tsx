@@ -29,7 +29,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [activeBusinessId, setActiveId] = useState<number>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? Number(stored) : 1;
+    return stored ? Number(stored) : 0; // 0 = no preference yet (avoids defaulting to id=1 across sessions)
   });
   const [loading, setLoading] = useState(true);
   const initialLoadedRef = useRef(false);
@@ -45,8 +45,11 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     if (authLoading) return; // wait for Supabase to restore session from localStorage
 
     if (!session) {
-      // User logged out: clear businesses list
+      // User logged out: clear businesses list and stored business ID so the
+      // next login doesn't show a stale business from a previous session.
       setBusinesses([]);
+      localStorage.removeItem(STORAGE_KEY);
+      setActiveId(0);
       setLoading(false);
       initialLoadedRef.current = false; // reset so next login shows spinner
       return;
@@ -62,10 +65,11 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       .then((list) => {
         initialLoadedRef.current = true;
         setBusinesses(list);
-        // Guard: if stored id no longer belongs to this user, fall back to first
+        // Guard: if stored id no longer belongs to this user, fall back to most
+        // recently created business (highest id), not the oldest (list[0]).
         const ids = list.map((b: Business) => b.id);
         if (!ids.includes(activeBusinessId) && list.length > 0) {
-          setActiveId(list[0].id);
+          setActiveId(list[list.length - 1].id);
         }
       })
       .catch(() => {

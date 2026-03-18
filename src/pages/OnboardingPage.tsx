@@ -102,14 +102,15 @@ export default function OnboardingPage() {
     setError(null);
     try {
       const biz = await createBusiness(name.trim(), nicho);
-      // After creating, patch the extra fields if provided
+      // Fire-and-forget extra fields — don't block navigation if this fails.
+      // The business is already created; fields can be edited later in Settings.
       if ((aiContext.trim() || workingHours.trim()) && biz?.id) {
-        await api.updateBusiness(biz.id, {
+        api.updateBusiness(biz.id, {
           ai_context: aiContext.trim() || selectedNicho?.context || '',
           working_hours: workingHours.trim() || 'Lun–Vie 9:00–18:00',
-        } as any);
+        } as any).catch(() => {});
       }
-      // BusinessContext auto-switches → App.tsx shows dashboard
+      // BusinessContext already switched → App.tsx renders dashboard
     } catch (err: any) {
       setError(err.message || 'Error al crear el negocio. Intenta de nuevo.');
       setSaving(false);
