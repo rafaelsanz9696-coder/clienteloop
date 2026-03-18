@@ -4,7 +4,7 @@ const { Pool } = pg;
 // We expect DATABASE_URL or POSTGRES_URL to be set in environment variables
 function getPool() {
   const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || 'postgresql://postgres:postgres@localhost:5432/clienteloop';
-  const needsSsl = connectionString.includes('sslmode') || connectionString.includes('supabase.co');
+  const needsSsl = connectionString.includes('sslmode') || connectionString.includes('supabase.co') || connectionString.includes('supabase.com');
 
   const pool = new Pool({
     connectionString,
