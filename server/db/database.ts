@@ -6,10 +6,17 @@ function getPool() {
   const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || 'postgresql://postgres:postgres@localhost:5432/clienteloop';
   const needsSsl = connectionString.includes('sslmode') || connectionString.includes('supabase.co');
 
-  return new Pool({
+  const pool = new Pool({
     connectionString,
     ...(needsSsl ? { ssl: { rejectUnauthorized: false } } : {}),
   });
+
+  // Required: without this, idle client errors (e.g. ENETUNREACH) crash the process
+  pool.on('error', (err) => {
+    console.error('[DB Pool] Idle client error:', err.message);
+  });
+
+  return pool;
 }
 
 let poolInstance: pg.Pool | null = null;
