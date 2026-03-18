@@ -39,37 +39,7 @@ router.post('/', async (req: AuthenticatedRequest, res) => {
   }
 });
 
-// GET /api/business/:id
-router.get('/:id', async (req: AuthenticatedRequest, res) => {
-  try {
-    const bid = req.user!.business_id;
-    // Security: only allow fetching the user's own active business
-    if (bid !== Number(req.params.id)) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-    const { rows } = await db.query('SELECT * FROM businesses WHERE id = $1', [bid]);
-    if (rows.length === 0) return res.status(404).json({ error: 'Business not found' });
-    res.json(rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: 'DB Error' });
-  }
-});
-
-// PUT /api/business/:id
-router.put('/:id', async (req: AuthenticatedRequest, res) => {
-  try {
-    const { name, nicho, owner_name, email, phone, working_hours, ai_context } = req.body;
-    const { rows } = await db.query(`
-      UPDATE businesses SET name=$1, nicho=$2, owner_name=$3, email=$4, phone=$5, working_hours=$6, ai_context=$7
-      WHERE id=$8 AND (supabase_user_id=$9 OR id=$10) RETURNING *
-    `, [name, nicho, owner_name, email, phone, working_hours, ai_context, req.params.id, req.user?.id, req.user?.business_id]);
-    res.json(rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: 'DB Error' });
-  }
-});
-
-// ─── Channel Numbers ───────────────────────────────────────────────────────
+// ─── Channel Numbers (must be before /:id to avoid route shadowing) ────────
 
 // GET /api/business/channels
 router.get('/channels', async (req: AuthenticatedRequest, res) => {
@@ -150,6 +120,38 @@ router.patch('/booking-slug', async (req: AuthenticatedRequest, res) => {
     res.json({ success: true, booking_slug: slug || null });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: 'DB Error' });
+  }
+});
+
+// ─── Parameterized routes (must come after specific named paths) ────────────
+
+// GET /api/business/:id
+router.get('/:id', async (req: AuthenticatedRequest, res) => {
+  try {
+    const bid = req.user!.business_id;
+    // Security: only allow fetching the user's own active business
+    if (bid !== Number(req.params.id)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    const { rows } = await db.query('SELECT * FROM businesses WHERE id = $1', [bid]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Business not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'DB Error' });
+  }
+});
+
+// PUT /api/business/:id
+router.put('/:id', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { name, nicho, owner_name, email, phone, working_hours, ai_context } = req.body;
+    const { rows } = await db.query(`
+      UPDATE businesses SET name=$1, nicho=$2, owner_name=$3, email=$4, phone=$5, working_hours=$6, ai_context=$7
+      WHERE id=$8 AND (supabase_user_id=$9 OR id=$10) RETURNING *
+    `, [name, nicho, owner_name, email, phone, working_hours, ai_context, req.params.id, req.user?.id, req.user?.business_id]);
+    res.json(rows[0]);
+  } catch (err) {
     res.status(500).json({ error: 'DB Error' });
   }
 });
