@@ -7,7 +7,8 @@ const router = Router();
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // GET /api/ai/insights — generate real-time insights from conversations and patterns
-router.get('/insights', async (req: AuthenticatedRequest, res) => {
+// Route is '/' because this router is mounted at '/api/ai/insights' in index.ts
+router.get('/', async (req: AuthenticatedRequest, res) => {
     try {
         const bid = req.user!.business_id;
 
