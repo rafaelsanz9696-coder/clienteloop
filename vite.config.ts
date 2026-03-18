@@ -54,9 +54,21 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Cache app shell + static assets
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        // Cache static assets only — exclude html so index.html is always
+        // fetched from network. This ensures new Vercel deploys are picked up
+        // immediately instead of the SW serving a stale bundle with no VITE_API_URL.
+        globPatterns: ['**/*.{js,css,svg,png,ico,woff2}'],
         runtimeCaching: [
+          {
+            // Navigation requests (HTML): always go to network first so users
+            // get the latest index.html (and therefore the latest JS bundle).
+            urlPattern: ({ request }: { request: Request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'html-cache',
+              networkTimeoutSeconds: 3,
+            },
+          },
           {
             // Network-first for API reads (stats, contacts, conversations)
             urlPattern: /^https?:\/\/.*\/api\/(stats|contacts|conversations)/,
