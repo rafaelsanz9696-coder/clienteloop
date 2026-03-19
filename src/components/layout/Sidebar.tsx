@@ -253,14 +253,14 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           open ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        {/* Logo */}
+        {/* Logo — links to landing page */}
         <div className="flex items-center justify-between p-5 border-b border-slate-800">
-          <div className="flex items-center gap-2">
+          <a href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
             <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-sm">
               CL
             </div>
             <span className="font-bold text-lg tracking-tight">ClienteLoop</span>
-          </div>
+          </a>
           <button onClick={onClose} className="lg:hidden text-slate-400 hover:text-white">
             <X className="w-5 h-5" />
           </button>
