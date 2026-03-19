@@ -20,6 +20,8 @@ interface BusinessContextValue {
   switchBusiness: (id: number) => void;
   createBusiness: (name: string, nicho: string) => Promise<Business>;
   loading: boolean;
+  loadError: boolean;
+  retryLoad: () => void;
 }
 
 const BusinessContext = createContext<BusinessContextValue | null>(null);
@@ -32,6 +34,8 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     return stored ? Number(stored) : 0; // 0 = no preference yet (avoids defaulting to id=1 across sessions)
   });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const initialLoadedRef = useRef(false);
 
   // Sync api.ts module variable and localStorage on every change
@@ -40,7 +44,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, String(activeBusinessId));
   }, [activeBusinessId]);
 
-  // Load businesses when auth state changes
+  // Load businesses when auth state changes or user manually retries
   useEffect(() => {
     if (authLoading) return; // wait for Supabase to restore session from localStorage
 
@@ -48,6 +52,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       // User logged out: clear businesses list and stored business ID so the
       // next login doesn't show a stale business from a previous session.
       setBusinesses([]);
+      setLoadError(false);
       localStorage.removeItem(STORAGE_KEY);
       setActiveId(0);
       setLoading(false);
@@ -64,6 +69,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     api.getBusinesses()
       .then((list) => {
         initialLoadedRef.current = true;
+        setLoadError(false);
         setBusinesses(list);
         // Guard: if stored id no longer belongs to this user, fall back to most
         // recently created business (highest id), not the oldest (list[0]).
@@ -73,13 +79,22 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch(() => {
-        // Backend not available — keep current state
+        // Only flag error on first load — silent retries on JWT refresh are fine
+        if (!initialLoadedRef.current) {
+          setLoadError(true);
+        }
       })
       .finally(() => setLoading(false));
-  }, [session, authLoading]); // re-run when user logs in or out
+  }, [session, authLoading, retryCount]); // retryCount forces re-fetch on manual retry
 
   const switchBusiness = useCallback((id: number) => {
     setActiveId(id);
+  }, []);
+
+  const retryLoad = useCallback(() => {
+    setLoadError(false);
+    setLoading(true);
+    setRetryCount((c) => c + 1);
   }, []);
 
   const createBusiness = useCallback(async (name: string, nicho: string): Promise<Business> => {
@@ -93,7 +108,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
 
   return (
     <BusinessContext.Provider
-      value={{ businesses, activeBusiness, activeBusinessId, switchBusiness, createBusiness, loading }}
+      value={{ businesses, activeBusiness, activeBusinessId, switchBusiness, createBusiness, loading, loadError, retryLoad }}
     >
       {children}
     </BusinessContext.Provider>

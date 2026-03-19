@@ -3,6 +3,31 @@ import { Sparkles, Send, X, CheckCircle2, Loader2, Bot, User } from 'lucide-reac
 import { cn } from '../lib/utils';
 import { api } from '../lib/api';
 
+// ─── Simple inline markdown renderer (bold + line breaks) ────────────────────
+function renderMarkdown(text: string) {
+  // Split by **bold** and render each part
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    // Convert single *italic* too
+    const italicParts = part.split(/(\*[^*]+\*)/g);
+    return italicParts.map((ip, j) => {
+      if (ip.startsWith('*') && ip.endsWith('*') && ip.length > 2) {
+        return <em key={`${i}-${j}`}>{ip.slice(1, -1)}</em>;
+      }
+      // Render line breaks
+      return ip.split('\n').map((line, k, arr) => (
+        <span key={`${i}-${j}-${k}`}>
+          {line}
+          {k < arr.length - 1 && <br />}
+        </span>
+      ));
+    });
+  });
+}
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
@@ -166,13 +191,13 @@ export default function AISetupAssistant({ onClose, onDone }: Props) {
                   </div>
                   <div
                     className={cn(
-                      'max-w-[78%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap',
+                      'max-w-[78%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed',
                       msg.role === 'assistant'
                         ? 'bg-slate-100 text-slate-800 rounded-tl-md'
                         : 'bg-blue-500 text-white rounded-tr-md'
                     )}
                   >
-                    {msg.content}
+                    {msg.role === 'assistant' ? renderMarkdown(msg.content) : msg.content}
                   </div>
                 </div>
               ))}
