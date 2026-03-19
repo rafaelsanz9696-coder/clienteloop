@@ -31,9 +31,10 @@ router.post('/chat', async (req, res) => {
       messages: Array<{ role: 'user' | 'assistant'; content: string }>;
     };
 
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+    if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'messages array required' });
     }
+    // Empty array is valid — means the assistant should send the opening greeting
 
     // Load business info for personalization
     const { rows: bizRows } = await db.query(
