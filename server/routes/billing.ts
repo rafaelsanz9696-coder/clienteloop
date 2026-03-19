@@ -17,7 +17,12 @@ function getStripe(): Stripe {
   return _stripe;
 }
 
-const PRICE_BASE = process.env.STRIPE_PRICE_BASE || '';
+// Plan → Stripe price ID mapping (set all 3 in Railway env vars)
+const PLAN_PRICES: Record<string, string> = {
+  starter: process.env.STRIPE_PRICE_STARTER || process.env.STRIPE_PRICE_BASE || '',
+  pro:     process.env.STRIPE_PRICE_PRO     || '',
+  agency:  process.env.STRIPE_PRICE_AGENCY  || '',
+};
 const PRICE_SEAT = process.env.STRIPE_PRICE_SEAT || '';
 const FRONTEND_URL = process.env.CORS_ORIGIN || 'http://localhost:4000';
 
@@ -26,6 +31,16 @@ router.post('/create-checkout-session', requireAuth, async (req: AuthenticatedRe
   try {
     const businessId = req.user!.business_id;
     if (!businessId) return res.status(400).json({ error: 'Business ID required' });
+
+    // Accept the desired plan from the request body (defaults to 'starter')
+    const plan: string = ['starter', 'pro', 'agency'].includes(req.body.plan)
+      ? req.body.plan
+      : 'starter';
+
+    const priceId = PLAN_PRICES[plan];
+    if (!priceId) {
+      return res.status(400).json({ error: `Stripe price not configured for plan: ${plan}` });
+    }
 
     const { rows } = await db.query(
       'SELECT name, email, stripe_customer_id FROM businesses WHERE id = $1',
@@ -38,13 +53,13 @@ router.post('/create-checkout-session', requireAuth, async (req: AuthenticatedRe
     const session = await getStripe().checkout.sessions.create({
       payment_method_types: ['card'],
       customer: biz.stripe_customer_id || undefined,
-      line_items: [{ price: PRICE_BASE, quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
       success_url: `${FRONTEND_URL}/app/settings?session_id={CHECKOUT_SESSION_ID}&tab=billing`,
       cancel_url: `${FRONTEND_URL}/app/settings?tab=billing`,
       customer_email: biz.stripe_customer_id ? undefined : (biz.email || undefined),
-      metadata: { business_id: businessId.toString() },
-      subscription_data: { metadata: { business_id: businessId.toString() } },
+      metadata: { business_id: businessId.toString(), plan },
+      subscription_data: { metadata: { business_id: businessId.toString(), plan } },
       allow_promotion_codes: true,
     });
 
@@ -130,20 +145,20 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
         const businessId = session.metadata?.business_id;
+        const plan = session.metadata?.plan || 'pro'; // plan stored in metadata at checkout creation
         const customerId = session.customer as string;
         const subscriptionId = session.subscription as string;
 
         if (businessId && subscriptionId) {
-          // Fetch subscription to get status
           const sub = await getStripe().subscriptions.retrieve(subscriptionId);
           await db.query(
             `UPDATE businesses
              SET stripe_customer_id = $1, stripe_subscription_id = $2,
-                 plan = 'pro', subscription_status = $3
-             WHERE id = $4`,
-            [customerId, subscriptionId, sub.status, businessId]
+                 plan = $3, subscription_status = $4
+             WHERE id = $5`,
+            [customerId, subscriptionId, plan, sub.status, businessId]
           );
-          console.log(`[Billing] Business ${businessId} activated — plan=pro, status=${sub.status}`);
+          console.log(`[Billing] Business ${businessId} activated — plan=${plan}, status=${sub.status}`);
         }
         break;
       }
@@ -153,7 +168,12 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
         const businessId = sub.metadata?.business_id;
 
         if (businessId) {
-          const plan = sub.status === 'active' || sub.status === 'trialing' ? 'pro' : 'starter';
+          // Read plan from subscription metadata; fall back to 'starter' if canceled/past_due
+          const activePlans = ['active', 'trialing'];
+          const metaPlan = sub.metadata?.plan;
+          const plan = activePlans.includes(sub.status) && metaPlan
+            ? metaPlan
+            : 'starter';
           await db.query(
             `UPDATE businesses SET plan = $1, subscription_status = $2
              WHERE stripe_subscription_id = $3`,

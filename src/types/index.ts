@@ -1,7 +1,7 @@
 export interface Business {
   id: number;
   name: string;
-  nicho: 'salon' | 'clinica' | 'inmobiliaria' | 'restaurante' | 'academia' | 'taller';
+  nicho: string;
   owner_name: string;
   email: string | null;
   phone: string | null;
@@ -10,6 +10,7 @@ export interface Business {
   created_at: string;
   booking_slug?: string | null;
   my_role?: 'admin' | 'agent';
+  plan?: 'starter' | 'pro' | 'agency';
 }
 
 export interface TeamMember {

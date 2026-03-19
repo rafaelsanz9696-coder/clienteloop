@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { cn } from '../lib/utils';
 import {
   MessageSquare,
   Users,
@@ -97,8 +98,8 @@ const faqs = [
     a: 'La IA sugiere respuestas pero puedes configurarla para auto-responder solo en horarios específicos o solo en ciertos temas. Siempre puedes intervenir manualmente. Además, aprende de tus correcciones.',
   },
   {
-    q: '¿Qué pasa si necesito más de 3 agentes?',
-    a: 'Puedes agregar agentes adicionales por $19/mes cada uno. Sin límite máximo. Si tienes un equipo grande, contáctanos para un plan personalizado.',
+    q: '¿Puedo manejar varios negocios desde una sola cuenta?',
+    a: 'Sí. El plan Pro incluye hasta 3 negocios y el plan Agency ilimitados. Cambias de negocio en un clic desde el panel lateral. Ideal para agencias y emprendedores con múltiples marcas.',
   },
   {
     q: '¿Puedo cancelar en cualquier momento?',
@@ -354,88 +355,126 @@ function Testimonials() {
   );
 }
 
+const plans = [
+  {
+    name: 'Starter',
+    price: '$99',
+    desc: 'Para un negocio que quiere crecer',
+    highlight: false,
+    badge: null,
+    features: [
+      '1 negocio',
+      'Hasta 3 agentes humanos',
+      'Inbox unificado (WA + IG + Email)',
+      'CRM completo con pipeline visual',
+      'Agente de IA especializado en tu nicho',
+      'Memoria Agentica',
+      'Soporte directo en español',
+    ],
+    cta: 'Comenzar gratis',
+    ctaNote: 'Sin tarjeta de crédito',
+  },
+  {
+    name: 'Pro',
+    price: '$149',
+    desc: 'Para negocios que manejan múltiples marcas',
+    highlight: true,
+    badge: 'Más popular',
+    features: [
+      'Hasta 3 negocios',
+      'Hasta 5 agentes humanos',
+      'Todo lo de Starter',
+      'Cambio de negocio en 1 clic',
+      'Insights y sugerencias proactivas',
+      'Copilot IA con 12 herramientas',
+      'Soporte prioritario',
+    ],
+    cta: 'Elegir Pro',
+    ctaNote: '14 días de prueba gratis',
+  },
+  {
+    name: 'Agency',
+    price: '$249',
+    desc: 'Para agencias que gestionan clientes',
+    highlight: false,
+    badge: null,
+    features: [
+      'Negocios ilimitados',
+      'Hasta 10 agentes humanos',
+      'Todo lo de Pro',
+      'Dashboard multi-cuenta',
+      'Agentes extra a $19/mes c/u',
+      'Onboarding dedicado',
+      'Soporte VIP 24/7',
+    ],
+    cta: 'Elegir Agency',
+    ctaNote: '14 días de prueba gratis',
+  },
+];
+
 function Pricing() {
   return (
     <section id="pricing" className="py-20 px-6">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <div className="text-center mb-14">
-          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">Un solo plan. Todo incluido.</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">Planes que crecen contigo</h2>
           <p className="text-slate-400">
-            Reemplaza 4 herramientas diferentes y ahorra cientos de dolares al mes.
+            Empieza con un negocio y escala sin límite. Sin contratos, cancela cuando quieras.
           </p>
         </div>
-        <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-          {/* ClienteLoop */}
-          <div className="p-8 bg-gradient-to-b from-blue-950/40 to-slate-900 rounded-2xl border border-blue-500/30 relative shadow-2xl shadow-blue-900/20">
-            <div className="absolute -top-3 left-6 px-3 py-1 bg-blue-600 rounded-full text-xs font-semibold text-white">
-              Prueba 14 dias gratis
-            </div>
-            <h3 className="text-white font-bold text-xl mb-2">ClienteLoop Pro</h3>
-            <div className="flex items-baseline gap-1 mb-1">
-              <span className="text-5xl font-black text-white">$99</span>
-              <span className="text-slate-400 text-sm font-medium">USD/mes</span>
-            </div>
-            <p className="text-xs text-slate-500 mb-4">
-              Incluye 3 agentes · agentes extra a <span className="text-blue-400 font-semibold">$19/mes c/u</span>
-            </p>
-            <p className="text-sm text-blue-300 font-medium mb-6 bg-blue-500/10 px-3 py-2 rounded-lg border border-blue-500/20">
-              Ideal para negocios que venden por WhatsApp
-            </p>
-            <ul className="space-y-4 mb-8">
-              {[
-                'Inbox unificado (WA + IG + Email)',
-                'CRM completo con pipeline visual',
-                'Agente de IA especializado en tu nicho',
-                'Memoria Agentica (aprende de tu negocio)',
-                'Insights y sugerencias proactivas',
-                'Hasta 3 agentes humanos incluidos',
-                'Soporte directo en espanol',
-              ].map((item) => (
-                <li key={item} className="flex items-start gap-3 text-sm text-slate-300">
-                  <Check className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
-                  <span className="leading-snug">{item}</span>
-                </li>
-              ))}
-            </ul>
-            <Link
-              to="/login?tab=signup"
-              className="flex items-center justify-center gap-2 w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-sm text-center transition-all shadow-lg shadow-blue-900/40"
-            >
-              Comenzar prueba gratis <ArrowRight className="w-4 h-4" />
-            </Link>
-            <p className="text-center text-xs text-slate-600 mt-3">No se requiere tarjeta de credito</p>
-          </div>
 
-          {/* Competencia */}
-          <div className="p-8 bg-slate-900/40 rounded-2xl border border-slate-800 flex flex-col opacity-80">
-            <h3 className="text-slate-400 font-bold text-xl mb-2">Comprarlo por separado</h3>
-            <div className="flex items-baseline gap-1 mb-4">
-              <span className="text-5xl font-black text-slate-600">$250+</span>
-              <span className="text-slate-600 text-sm font-medium">USD/mes</span>
+        <div className="grid sm:grid-cols-3 gap-6">
+          {plans.map((plan) => (
+            <div
+              key={plan.name}
+              className={cn(
+                'relative rounded-2xl p-7 flex flex-col border transition-all',
+                plan.highlight
+                  ? 'bg-gradient-to-b from-blue-950/60 to-slate-900 border-blue-500/50 shadow-2xl shadow-blue-900/30 scale-[1.03]'
+                  : 'bg-slate-900/50 border-slate-800'
+              )}
+            >
+              {plan.badge && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-blue-600 rounded-full text-xs font-bold text-white whitespace-nowrap">
+                  {plan.badge}
+                </div>
+              )}
+
+              <h3 className={cn('font-bold text-lg mb-1', plan.highlight ? 'text-white' : 'text-slate-300')}>
+                {plan.name}
+              </h3>
+              <p className="text-xs text-slate-500 mb-4 leading-snug">{plan.desc}</p>
+
+              <div className="flex items-baseline gap-1 mb-6">
+                <span className={cn('text-4xl font-black', plan.highlight ? 'text-white' : 'text-slate-200')}>
+                  {plan.price}
+                </span>
+                <span className="text-slate-500 text-sm">USD/mes</span>
+              </div>
+
+              <ul className="space-y-3 mb-8 flex-1">
+                {plan.features.map((f) => (
+                  <li key={f} className="flex items-start gap-2.5 text-sm text-slate-300">
+                    <Check className={cn('w-4 h-4 mt-0.5 shrink-0', plan.highlight ? 'text-blue-400' : 'text-slate-500')} />
+                    <span className="leading-snug">{f}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <Link
+                to="/login?tab=signup"
+                className={cn(
+                  'flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-bold transition-all',
+                  plan.highlight
+                    ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/40'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                )}
+              >
+                {plan.cta} <ArrowRight className="w-4 h-4" />
+              </Link>
+              <p className="text-center text-xs text-slate-600 mt-2">{plan.ctaNote}</p>
             </div>
-            <p className="text-sm text-slate-500 font-medium mb-6 px-3 py-2">
-              Fragmentado y dificil de mantener
-            </p>
-            <ul className="space-y-4 mb-8 flex-1">
-              {[
-                'Inbox multicanal (Ej: Manychat $50/m)',
-                'CRM de ventas (Ej: HubSpot $50/m)',
-                'Chatbot Generico (Ej: Chatnode $100/m)',
-                '❌ No entiende tu industria',
-                '❌ Sin memoria agentica',
-                '❌ Integraciones complejas (Zapier $50/m)',
-              ].map((item, i) => (
-                <li key={i} className="flex items-start gap-3 text-sm text-slate-500">
-                  <div className="mt-0.5 shrink-0">
-                    {!item.startsWith('❌') && <Check className="w-5 h-5 text-slate-600" />}
-                  </div>
-                  <span className={item.startsWith('❌') ? 'text-slate-600 pl-8' : ''}>
-                    {item.startsWith('❌') ? item.replace('❌ ', '') : item}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
+          ))}
         </div>
       </div>
     </section>

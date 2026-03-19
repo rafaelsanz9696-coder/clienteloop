@@ -4,12 +4,20 @@ import { AuthenticatedRequest } from '../middleware/auth.js';
 
 const router = Router();
 
+// Plan limits: how many owned businesses each plan allows
+const PLAN_LIMITS: Record<string, number> = {
+  starter: 1,
+  pro: 3,
+  agency: Infinity,
+};
+
 // GET /api/business  — list all accessible businesses (owned + member)
 router.get('/', async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.user?.id;
     const { rows } = await db.query(
       `SELECT b.id, b.name, b.nicho, b.owner_name, b.booking_slug,
+              COALESCE(b.plan, 'starter') AS plan,
               CASE WHEN b.supabase_user_id = $1 THEN 'admin' ELSE bm.role END AS my_role
        FROM businesses b
        LEFT JOIN business_members bm
@@ -24,14 +32,39 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
   }
 });
 
-// POST /api/business  — create new business
+// POST /api/business  — create new business (enforces plan limits)
 router.post('/', async (req: AuthenticatedRequest, res) => {
   try {
     const { name, nicho = 'salon' } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required' });
+
+    const userId = req.user?.id;
+
+    // Get the best plan across all businesses this user owns
+    const { rows: ownedRows } = await db.query(
+      `SELECT COALESCE(plan, 'starter') AS plan FROM businesses WHERE supabase_user_id = $1`,
+      [userId]
+    );
+    const PLAN_RANK: Record<string, number> = { starter: 0, pro: 1, agency: 2 };
+    const bestPlan = ownedRows.reduce((best: string, row: { plan: string }) => {
+      return (PLAN_RANK[row.plan] ?? 0) > (PLAN_RANK[best] ?? 0) ? row.plan : best;
+    }, 'starter');
+
+    const limit = PLAN_LIMITS[bestPlan] ?? 1;
+    const currentCount = ownedRows.length;
+
+    if (currentCount >= limit) {
+      return res.status(403).json({
+        error: 'PLAN_LIMIT_REACHED',
+        plan: bestPlan,
+        limit,
+        current: currentCount,
+      });
+    }
+
     const { rows } = await db.query(
       `INSERT INTO businesses (name, nicho, owner_name, supabase_user_id) VALUES ($1, $2, 'Dueño', $3) RETURNING *`,
-      [name, nicho, req.user?.id]
+      [name, nicho, userId]
     );
     res.status(201).json(rows[0]);
   } catch (err) {

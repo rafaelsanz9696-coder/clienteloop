@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   MessageSquare,
@@ -15,11 +15,17 @@ import {
   BarChart2,
   CalendarDays,
   Megaphone,
+  Lock,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useBusiness } from '../../contexts/BusinessContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSocket } from '../../contexts/SocketContext';
+
+// Plan limits: how many owned businesses each plan allows
+const PLAN_LIMITS: Record<string, number> = { starter: 1, pro: 3, agency: Infinity };
+const PLAN_RANK: Record<string, number> = { starter: 0, pro: 1, agency: 2 };
+const PLAN_LABELS: Record<string, string> = { starter: 'Starter', pro: 'Pro', agency: 'Agency' };
 
 const navItems = [
   { to: '/app', icon: LayoutDashboard, label: 'Dashboard' },
@@ -135,6 +141,26 @@ function BusinessSelector() {
   const { businesses, activeBusiness, switchBusiness } = useBusiness();
   const [open, setOpen] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const navigate = useNavigate();
+
+  // Compute plan limits from owned businesses
+  const owned = businesses.filter((b) => b.my_role === 'admin');
+  const bestPlan = owned.reduce((best, b) => {
+    const p = b.plan ?? 'starter';
+    return (PLAN_RANK[p] ?? 0) > (PLAN_RANK[best] ?? 0) ? p : best;
+  }, 'starter');
+  const limit = PLAN_LIMITS[bestPlan] ?? 1;
+  const atLimit = owned.length >= limit && limit !== Infinity;
+  const nextPlan = bestPlan === 'starter' ? 'pro' : 'agency';
+
+  function handleNewBusiness() {
+    setOpen(false);
+    if (atLimit) {
+      navigate('/app/settings?tab=billing&upgrade=' + nextPlan);
+    } else {
+      setShowModal(true);
+    }
+  }
 
   return (
     <>
@@ -184,12 +210,23 @@ function BusinessSelector() {
                 </span>
               </button>
             ))}
+
+            {/* "+ Nuevo negocio" — shows upgrade prompt if plan limit reached */}
             <button
-              onClick={() => { setOpen(false); setShowModal(true); }}
-              className="w-full text-left px-3 py-2.5 text-sm text-blue-400 hover:bg-slate-700 flex items-center gap-2 border-t border-slate-700 transition-colors"
+              onClick={handleNewBusiness}
+              className={cn(
+                'w-full text-left px-3 py-2.5 text-sm flex items-center gap-2 border-t border-slate-700 transition-colors',
+                atLimit
+                  ? 'text-amber-400 hover:bg-amber-500/10'
+                  : 'text-blue-400 hover:bg-slate-700'
+              )}
             >
-              <Plus className="w-4 h-4" />
-              <span>Nuevo negocio...</span>
+              {atLimit ? <Lock className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              <span>
+                {atLimit
+                  ? `Actualiza a ${PLAN_LABELS[nextPlan]} para agregar más`
+                  : 'Nuevo negocio...'}
+              </span>
             </button>
           </div>
         )}
