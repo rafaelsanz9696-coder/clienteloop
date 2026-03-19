@@ -78,12 +78,17 @@ Reglas:
 - Si el usuario dice que sí o acepta, responde ÚNICAMENTE con el texto exacto: SETUP_COMPLETE
 - No respondas nada más después de SETUP_COMPLETE.`;
 
+    // Anthropic requires at least one message — inject a trigger when empty (opening greeting)
+    const messagesForApi = messages.length > 0
+      ? messages
+      : [{ role: 'user' as const, content: 'Hola, quiero configurar mi negocio.' }];
+
     const anthropic = getClient();
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 400,
       system: systemPrompt,
-      messages,
+      messages: messagesForApi,
     });
 
     const textBlock = response.content.find((c) => c.type === 'text');
