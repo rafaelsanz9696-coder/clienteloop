@@ -18,12 +18,12 @@ function BrandPanel() {
   return (
     <div className="hidden lg:flex flex-col justify-between p-12 bg-gradient-to-br from-slate-900 to-blue-950 text-white">
       {/* Logo */}
-      <div className="flex items-center gap-3">
+      <a href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity w-fit">
         <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center font-bold text-lg">
           CL
         </div>
         <span className="text-xl font-bold tracking-tight">ClienteLoop</span>
-      </div>
+      </a>
 
       {/* Headline */}
       <div className="space-y-6">
@@ -133,10 +133,10 @@ export default function LoginPage() {
       {/* Right: form panel */}
       <div className="flex flex-col items-center justify-center p-8 sm:p-12">
         {/* Mobile logo */}
-        <div className="lg:hidden flex items-center gap-2 mb-10">
+        <a href="/" className="lg:hidden flex items-center gap-2 mb-10 hover:opacity-80 transition-opacity">
           <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center font-bold">CL</div>
           <span className="text-lg font-bold text-white tracking-tight">ClienteLoop</span>
-        </div>
+        </a>
 
         <div className="w-full max-w-sm">
           {/* Tabs */}
