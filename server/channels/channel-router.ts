@@ -22,6 +22,7 @@ export async function sendChannelMessage(
   channel: string,
   conversationId: number,
   text: string,
+  media?: { type: string; url: string; mime?: string; name?: string },
 ): Promise<void> {
   if (process.env.ENABLE_CHANNELS !== 'true') {
     return; // Channels disabled via env flag
@@ -46,7 +47,7 @@ export async function sendChannelMessage(
 
   switch (channel.toLowerCase()) {
     case 'whatsapp':
-      await WhatsAppAdapter.sendMessage(conversationId, text);
+      await WhatsAppAdapter.sendMessage(conversationId, text, media);
       break;
 
     default:

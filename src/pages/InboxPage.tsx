@@ -19,6 +19,9 @@ import {
   Clock,
   CheckCircle2,
   Calendar,
+  FileText,
+  MapPin,
+  Paperclip,
 } from 'lucide-react';
 import { cn, formatRelativeTime, getChannelColor, getChannelLabel, getStageLabel, getStageColor } from '../lib/utils';
 import { api } from '../lib/api';
@@ -440,8 +443,90 @@ function ConversationList({
   );
 }
 
-// Message Bubble
-function MessageBubble({ message }: { message: Message }) {
+// ─── Media renderer inside a bubble ─────────────────────────────────────────
+function MediaContent({
+  message,
+  onExpandImage,
+}: {
+  message: Message;
+  onExpandImage: (url: string) => void;
+}) {
+  const { media_type, media_url, media_mime, media_name, media_caption,
+    location_lat, location_lng, location_name } = message;
+
+  if (!media_type || !media_type) return <p className="whitespace-pre-wrap">{message.content}</p>;
+
+  switch (media_type) {
+    case 'image':
+    case 'sticker':
+      return (
+        <div>
+          <img
+            src={media_url!}
+            alt={media_caption || 'imagen'}
+            className="rounded-xl max-w-full max-h-64 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+            onClick={() => onExpandImage(media_url!)}
+          />
+          {media_caption && <p className="text-sm mt-1.5">{media_caption}</p>}
+        </div>
+      );
+
+    case 'video':
+      return (
+        <div>
+          <video controls className="rounded-xl max-w-full max-h-48" preload="metadata">
+            <source src={media_url!} type={media_mime || 'video/mp4'} />
+          </video>
+          {media_caption && <p className="text-sm mt-1.5">{media_caption}</p>}
+        </div>
+      );
+
+    case 'audio':
+      return (
+        <audio controls className="w-full min-w-[200px]">
+          <source src={media_url!} type={media_mime || 'audio/ogg'} />
+        </audio>
+      );
+
+    case 'document':
+      return (
+        <a
+          href={media_url!}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 underline underline-offset-2 hover:opacity-80 transition-opacity"
+        >
+          <FileText className="w-4 h-4 shrink-0" />
+          <span className="truncate max-w-[180px]">{media_name || 'documento'}</span>
+        </a>
+      );
+
+    case 'location':
+      return (
+        <a
+          href={`https://www.google.com/maps?q=${location_lat},${location_lng}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 underline underline-offset-2 hover:opacity-80 transition-opacity"
+        >
+          <MapPin className="w-4 h-4 shrink-0" />
+          <span>{location_name || `${location_lat?.toFixed(5)}, ${location_lng?.toFixed(5)}`}</span>
+        </a>
+      );
+
+    default:
+      return <p className="whitespace-pre-wrap">{message.content}</p>;
+  }
+}
+
+// ─── Message Bubble ───────────────────────────────────────────────────────────
+function MessageBubble({
+  message,
+  onExpandImage,
+}: {
+  message: Message;
+  onExpandImage: (url: string) => void;
+}) {
   const isClient = message.sender === 'client';
   return (
     <div className={cn('flex mb-3', isClient ? 'justify-start' : 'justify-end')}>
@@ -461,7 +546,7 @@ function MessageBubble({ message }: { message: Message }) {
             <span className="text-[10px] font-medium">IA</span>
           </div>
         )}
-        <p className="whitespace-pre-wrap">{message.content}</p>
+        <MediaContent message={message} onExpandImage={onExpandImage} />
         <p
           className={cn(
             'text-[10px] mt-1',
@@ -501,6 +586,9 @@ function ConversationThread({
   const [taskExtracting, setTaskExtracting] = useState(false);
   const [intentLabel, setIntentLabel] = useState<string | null | undefined>(undefined);
   const [followupGenerating, setFollowupGenerating] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: conversation } = useApi(
@@ -567,6 +655,36 @@ function ConversationThread({
       refetchMessages();
     } finally {
       setSending(false);
+    }
+  }
+
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = ''; // allow re-selecting same file
+    setUploadingMedia(true);
+    try {
+      const { url, name, mime } = await api.uploadMedia(file);
+      const mediaType = mime.startsWith('image/') ? 'image'
+        : mime.startsWith('video/') ? 'video'
+        : mime.startsWith('audio/') ? 'audio'
+        : 'document';
+      const content = mediaType === 'document' ? `[documento: ${name}]` : `[${mediaType}]`;
+      await api.sendMediaMessage({
+        conversation_id: conversationId,
+        content,
+        media_type: mediaType,
+        media_url: url,
+        media_mime: mime,
+        media_name: mediaType === 'document' ? name : undefined,
+        sender: 'agent',
+      });
+      refetchMessages();
+    } catch (err) {
+      console.error('[Media Send]', err);
+      toast.error('Error al enviar el archivo. Intenta de nuevo.');
+    } finally {
+      setUploadingMedia(false);
     }
   }
 
@@ -744,7 +862,7 @@ function ConversationThread({
         ) : messages && messages.length > 0 ? (
           <>
             {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
+              <MessageBubble key={msg.id} message={msg} onExpandImage={setLightboxUrl} />
             ))}
             <div ref={messagesEndRef} />
           </>
@@ -867,6 +985,31 @@ function ConversationThread({
               </button>
             </div>
           </div>
+
+          {/* Hidden file input for media uploads */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept="image/*,video/*,.pdf,.doc,.docx"
+            onChange={handleFileSelect}
+          />
+          {/* Paperclip button */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadingMedia}
+            title="Adjuntar archivo"
+            className={cn(
+              'p-2 rounded-lg transition-colors shrink-0',
+              uploadingMedia
+                ? 'bg-blue-100 text-blue-400 animate-pulse cursor-not-allowed'
+                : 'text-slate-400 hover:text-blue-500 hover:bg-blue-50'
+            )}
+          >
+            <Paperclip className="w-5 h-5" />
+          </button>
+
           <textarea
             value={messageText}
             onChange={(e) => setMessageText(e.target.value)}
@@ -906,6 +1049,26 @@ function ConversationThread({
           </button>
         </div>
       </div>
+
+      {/* Lightbox overlay for images */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <img
+            src={lightboxUrl}
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            className="absolute top-4 right-4 text-white bg-black/40 rounded-full p-1 hover:bg-black/60 transition-colors"
+            onClick={() => setLightboxUrl(null)}
+          >
+            <X className="w-8 h-8" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

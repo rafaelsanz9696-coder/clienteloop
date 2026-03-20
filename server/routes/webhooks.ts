@@ -2,7 +2,19 @@ import { Router } from 'express';
 import db from '../db/database.js';
 import { AutomationService } from '../lib/automation.js';
 import { getIo } from '../lib/socket.js';
+import { downloadAndStoreMetaMedia } from '../lib/meta-media.js';
 import crypto from 'crypto';
+
+interface MediaPayload {
+  type: 'image' | 'document' | 'audio' | 'video' | 'sticker' | 'location';
+  url?: string;
+  mime?: string;
+  name?: string;
+  caption?: string;
+  lat?: number;
+  lng?: number;
+  locationName?: string;
+}
 
 const router = Router();
 
@@ -43,6 +55,7 @@ async function processIncomingMessage(
   name: string,
   text: string,
   channel: string,
+  media?: MediaPayload,
 ): Promise<void> {
   let contactId: number;
 
@@ -98,8 +111,22 @@ async function processIncomingMessage(
   }
 
   const { rows: msgRows } = await db.query(
-    "INSERT INTO messages (conversation_id, content, sender, is_ai_generated) VALUES ($1,$2,'client',0) RETURNING *",
-    [conversationId, text],
+    `INSERT INTO messages
+       (conversation_id, content, sender, is_ai_generated,
+        media_type, media_url, media_mime, media_name, media_caption,
+        location_lat, location_lng, location_name)
+     VALUES ($1,$2,'client',0,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+    [
+      conversationId, text,
+      media?.type ?? null,
+      media?.url ?? null,
+      media?.mime ?? null,
+      media?.name ?? null,
+      media?.caption ?? null,
+      media?.lat ?? null,
+      media?.lng ?? null,
+      media?.locationName ?? null,
+    ],
   );
   const newMsg = msgRows[0];
 
@@ -186,15 +213,64 @@ router.post('/meta/whatsapp', async (req, res) => {
           }
 
           const fromPhone = message.from;
-          const text = message.text?.body;
           const name = contact.profile?.name || fromPhone;
+          const msgType: string = message.type;
 
-          if (!text) {
-            console.log('[Meta Webhook] Received non-text message. Ignoring for now.');
+          let text = '';
+          let media: MediaPayload | undefined;
+
+          if (msgType === 'text') {
+            text = message.text?.body || '';
+            if (!text) continue; // empty text — skip
+
+          } else if (msgType === 'location') {
+            const loc = message.location;
+            const locName: string = loc.name || loc.address || '';
+            text = locName ? `[ubicación: ${locName}]` : '[ubicación compartida]';
+            media = {
+              type: 'location',
+              lat: loc.latitude,
+              lng: loc.longitude,
+              locationName: locName || undefined,
+            };
+
+          } else if (['image', 'document', 'audio', 'video', 'sticker'].includes(msgType)) {
+            const mediaData = (message as any)[msgType];
+            const mediaId: string = mediaData.id;
+            const mimeType: string = mediaData.mime_type || '';
+            const filename: string | undefined = mediaData.filename;
+            const caption: string | undefined = mediaData.caption;
+
+            // Human-readable fallback for content column
+            const labels: Record<string, string> = {
+              image: '[imagen]', audio: '[audio]', video: '[video]', sticker: '[sticker]',
+            };
+            text = msgType === 'document' && filename
+              ? `[documento: ${filename}]`
+              : (labels[msgType] ?? `[${msgType}]`);
+            if (caption) text += ` — ${caption}`;
+
+            try {
+              const publicUrl = await downloadAndStoreMetaMedia(mediaId, mimeType, filename);
+              media = {
+                type: msgType as MediaPayload['type'],
+                url: publicUrl,
+                mime: mimeType,
+                name: filename,
+                caption,
+              };
+            } catch (err) {
+              console.error(`[Meta Webhook] Media download failed for ${mediaId}:`, err);
+              text = `[${msgType} — no disponible]`;
+              // media stays undefined — stored as text-only fallback
+            }
+
+          } else {
+            console.log(`[Meta Webhook] Unsupported message type "${msgType}" — skipping.`);
             continue;
           }
 
-          await processIncomingMessage(businessId, fromPhone, null, name, text, 'whatsapp');
+          await processIncomingMessage(businessId, fromPhone, null, name, text, 'whatsapp', media);
         }
       }
     }

@@ -36,6 +36,7 @@ import publicBookRouter from './routes/publicBook.js';
 import broadcastsRouter from './routes/broadcasts.js';
 import teamRouter from './routes/team.js';
 import billingRouter from './routes/billing.js';
+import mediaRouter from './routes/media.js';
 import { errorLogger } from './middleware/errorLogger.js';
 import { requireAuth } from './middleware/auth.js';
 import { initSocket } from './lib/socket.js';
@@ -132,6 +133,7 @@ app.use('/api/services', requireAuth, servicesRouter);
 app.use('/api/broadcasts', requireAuth, broadcastsRouter);
 app.use('/api/team', requireAuth, teamRouter);
 app.use('/api/billing', billingRouter);
+app.use('/api/media', requireAuth, mediaRouter);
 
 // Global error handler
 Sentry.setupExpressErrorHandler(app);

@@ -314,6 +314,16 @@ export async function initDb() {
       CREATE INDEX IF NOT EXISTS idx_wa_retry_pending
         ON wa_retry_queue (status, next_retry_at)
         WHERE status = 'pending';
+
+      -- Media support: store WhatsApp images, documents, audio, video, location
+      ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_type    TEXT;
+      ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_url     TEXT;
+      ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_mime    TEXT;
+      ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_name    TEXT;
+      ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_caption TEXT;
+      ALTER TABLE messages ADD COLUMN IF NOT EXISTS location_lat  DOUBLE PRECISION;
+      ALTER TABLE messages ADD COLUMN IF NOT EXISTS location_lng  DOUBLE PRECISION;
+      ALTER TABLE messages ADD COLUMN IF NOT EXISTS location_name TEXT;
     `);
     console.log('[DB] PostgreSQL connected and schema initialized.');
   } catch (err) {

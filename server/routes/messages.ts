@@ -37,7 +37,10 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
 router.post('/', async (req: AuthenticatedRequest, res) => {
   try {
     const bid = req.user!.business_id;
-    const { conversation_id, content, sender = 'agent', is_ai_generated = false } = req.body;
+    const {
+      conversation_id, content, sender = 'agent', is_ai_generated = false,
+      media_type, media_url, media_mime, media_name,
+    } = req.body;
     if (!conversation_id || !content) {
       return res.status(400).json({ error: 'conversation_id and content are required' });
     }
@@ -50,9 +53,14 @@ router.post('/', async (req: AuthenticatedRequest, res) => {
     if (convCheck.length === 0) return res.status(404).json({ error: 'Conversation not found' });
 
     const { rows: newMsg } = await db.query(`
-      INSERT INTO messages (conversation_id, content, sender, is_ai_generated)
-      VALUES ($1, $2, $3, $4) RETURNING *
-    `, [conversation_id, content, sender, is_ai_generated ? 1 : 0]);
+      INSERT INTO messages
+        (conversation_id, content, sender, is_ai_generated,
+         media_type, media_url, media_mime, media_name)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *
+    `, [
+      conversation_id, content, sender, is_ai_generated ? 1 : 0,
+      media_type ?? null, media_url ?? null, media_mime ?? null, media_name ?? null,
+    ]);
 
     // Update conversation last message
     await db.query(`
@@ -83,7 +91,13 @@ router.post('/', async (req: AuthenticatedRequest, res) => {
         [conversation_id],
       );
       if (convRows.length > 0) {
-        sendChannelMessage(convRows[0].channel, Number(conversation_id), content);
+        const mediaArg = media_url ? {
+          type: media_type as string,
+          url: media_url as string,
+          mime: media_mime as string | undefined,
+          name: media_name as string | undefined,
+        } : undefined;
+        sendChannelMessage(convRows[0].channel, Number(conversation_id), content, mediaArg);
       }
     }
   } catch (err) {

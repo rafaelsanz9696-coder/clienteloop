@@ -151,6 +151,36 @@ export const api = {
     request<Message[]>(`/messages?conversation_id=${conversationId}`),
   sendMessage: (data: { conversation_id: number; content: string; sender?: string }) =>
     request<Message>('/messages', { method: 'POST', body: JSON.stringify(data) }),
+  sendMediaMessage: (data: {
+    conversation_id: number;
+    content: string;
+    media_type: string;
+    media_url: string;
+    media_mime: string;
+    media_name?: string;
+    sender?: string;
+  }) => request<Message>('/messages', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Media upload (agent file picker → Supabase Storage)
+  uploadMedia: async (file: File): Promise<{ url: string; name: string; mime: string }> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${BASE_URL}/media/upload`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        'x-business-id': String(_activeBusinessId),
+      },
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || `Upload failed: ${res.status}`);
+    }
+    return res.json();
+  },
 
   // Pipeline
   getPipeline: () => request<PipelineGrouped>(`/pipeline?business_id=${_activeBusinessId}`),

@@ -69,6 +69,8 @@ export interface Conversation {
   intent_label?: string | null;
 }
 
+export type MediaType = 'image' | 'document' | 'audio' | 'video' | 'sticker' | 'location';
+
 export interface Message {
   id: number;
   conversation_id: number;
@@ -76,6 +78,16 @@ export interface Message {
   sender: 'client' | 'agent';
   is_ai_generated: number;
   created_at: string;
+  delivery_status?: string;
+  // Media fields — all optional for backward compatibility
+  media_type?: MediaType | null;
+  media_url?: string | null;
+  media_mime?: string | null;
+  media_name?: string | null;
+  media_caption?: string | null;
+  location_lat?: number | null;
+  location_lng?: number | null;
+  location_name?: string | null;
 }
 
 export interface Task {

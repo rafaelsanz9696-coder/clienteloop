@@ -57,14 +57,19 @@ export async function sendDirectWhatsApp(
 }
 
 export const WhatsAppAdapter = {
-  async sendMessage(conversationId: number, text: string) {
+  async sendMessage(
+    conversationId: number,
+    text: string,
+    media?: { type: string; url: string; mime?: string; name?: string },
+  ) {
     console.log(`[WhatsApp] Sending message to conversation ${conversationId}: ${text}`);
 
     // Always log it in our database regardless of real/mock
     const { rows } = await db.query(`
-      INSERT INTO messages (conversation_id, content, sender, is_ai_generated)
-      VALUES ($1, $2, 'agent', 0) RETURNING *
-    `, [conversationId, text]);
+      INSERT INTO messages
+        (conversation_id, content, sender, is_ai_generated, media_type, media_url, media_mime, media_name)
+      VALUES ($1, $2, 'agent', 0, $3, $4, $5, $6) RETURNING *
+    `, [conversationId, text, media?.type ?? null, media?.url ?? null, media?.mime ?? null, media?.name ?? null]);
 
     const newMsg = rows[0];
 
@@ -104,19 +109,41 @@ export const WhatsAppAdapter = {
 
       if (phone) {
         try {
+          // Build Meta payload — media or text
+          let metaPayload: Record<string, unknown>;
+          const cleanTo = phone.replace(/\D/g, '');
+          if (media?.url) {
+            if (media.type === 'image') {
+              metaPayload = {
+                messaging_product: 'whatsapp', recipient_type: 'individual', to: cleanTo,
+                type: 'image', image: { link: media.url },
+              };
+            } else if (media.type === 'document') {
+              metaPayload = {
+                messaging_product: 'whatsapp', recipient_type: 'individual', to: cleanTo,
+                type: 'document', document: { link: media.url, filename: media.name || 'documento' },
+              };
+            } else {
+              // Fallback for other media types: send as text with link
+              metaPayload = {
+                messaging_product: 'whatsapp', recipient_type: 'individual', to: cleanTo,
+                type: 'text', text: { preview_url: true, body: `${text}\n${media.url}` },
+              };
+            }
+          } else {
+            metaPayload = {
+              messaging_product: 'whatsapp', recipient_type: 'individual', to: cleanTo,
+              type: 'text', text: { preview_url: false, body: text },
+            };
+          }
+
           const response = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-              messaging_product: 'whatsapp',
-              recipient_type: 'individual',
-              to: phone.replace(/\D/g, ''), // Ensure clean numeric string
-              type: 'text',
-              text: { preview_url: false, body: text }
-            })
+            body: JSON.stringify(metaPayload),
           });
 
           if (!response.ok) {
