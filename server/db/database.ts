@@ -154,6 +154,10 @@ export async function initDb() {
       );
       CREATE INDEX IF NOT EXISTS idx_channel_numbers_lookup ON channel_numbers(channel, identifier);
 
+      -- Embedded Signup: per-business WA access token + WABA ID
+      ALTER TABLE channel_numbers ADD COLUMN IF NOT EXISTS access_token TEXT;
+      ALTER TABLE channel_numbers ADD COLUMN IF NOT EXISTS waba_id      TEXT;
+
       -- Message delivery status tracking
       ALTER TABLE messages ADD COLUMN IF NOT EXISTS delivery_status TEXT DEFAULT 'sent';
 

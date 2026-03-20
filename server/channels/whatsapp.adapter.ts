@@ -10,7 +10,8 @@ import { enqueueRetry } from '../lib/wa-retry.js';
 export async function sendDirectWhatsApp(
   phone: string,
   text: string,
-  phoneId: string
+  phoneId: string,
+  accessToken?: string,  // per-business token from channel_numbers; falls back to env var
 ): Promise<{ sent: boolean; reason?: string }> {
   const cleanPhone = phone.replace(/\D/g, '');
   if (!cleanPhone) return { sent: false, reason: 'Invalid phone number' };
@@ -20,7 +21,7 @@ export async function sendDirectWhatsApp(
     return { sent: true, reason: 'simulated (ENABLE_CHANNELS=false)' };
   }
 
-  const token = process.env.META_ACCESS_TOKEN;
+  const token = accessToken ?? process.env.META_ACCESS_TOKEN;
   if (!token || !phoneId) {
     console.warn('[Reminder] Meta credentials missing — skipping send');
     return { sent: false, reason: 'Missing META credentials' };
@@ -90,11 +91,17 @@ export const WhatsAppAdapter = {
 
     // If real channels are enabled, send via Meta API
     if (process.env.ENABLE_CHANNELS === 'true') {
-      const token = process.env.META_ACCESS_TOKEN;
-      const phoneId = process.env.META_PHONE_ID;
+      // Look up per-business token from channel_numbers; fall back to global env vars
+      const { rows: chRows } = await db.query(
+        `SELECT identifier, access_token FROM channel_numbers
+         WHERE business_id = $1 AND channel = 'whatsapp' LIMIT 1`,
+        [bRows[0]?.business_id]
+      );
+      const token   = chRows[0]?.access_token   ?? process.env.META_ACCESS_TOKEN;
+      const phoneId = chRows[0]?.identifier     ?? process.env.META_PHONE_ID;
 
       if (!token || !phoneId) {
-        console.warn('[WhatsApp] Meta credentials missing (.env: META_ACCESS_TOKEN, META_PHONE_ID)');
+        console.warn('[WhatsApp] Meta credentials missing (no channel_numbers row and no env vars)');
         return { success: true, messageId: newMsg.id };
       }
 

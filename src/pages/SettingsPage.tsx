@@ -1,7 +1,12 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+
+// Allow TypeScript to recognise window.FB injected by Facebook SDK
+declare global {
+  interface Window { FB: any; fbAsyncInit: any; }
+}
 import { toast } from '../lib/toast';
 import { useSearchParams } from 'react-router-dom';
-import { Save, CheckCircle2, History, Upload, Sparkles, X, Plus, Trash2, MessageSquare, Mail, Phone, CalendarDays, Edit2, Link, Copy, ExternalLink, Users2, UserPlus, Shield, Crown, UserX, ChevronDown } from 'lucide-react';
+import { Save, CheckCircle2, History, Upload, Sparkles, X, Plus, Trash2, MessageSquare, Mail, Phone, CalendarDays, Edit2, Link, Copy, ExternalLink, Users2, UserPlus, Shield, Crown, UserX, ChevronDown, Loader2 } from 'lucide-react';
 import { cn, formatRelativeTime } from '../lib/utils';
 import { api } from '../lib/api';
 import { useApi } from '../hooks/useApi';
@@ -40,10 +45,77 @@ function ChannelsTab() {
   const { activeBusinessId } = useBusiness();
   const { data: channels, refetch } = useApi(() => api.getChannelNumbers(), [activeBusinessId]);
   const [adding, setAdding] = useState(false);
-  const [newChannel, setNewChannel] = useState('whatsapp');
+  const [newChannel, setNewChannel] = useState('sms');
   const [newIdentifier, setNewIdentifier] = useState('');
   const [newLabel, setNewLabel] = useState('');
   const [saving, setSaving] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+
+  // Determine if WhatsApp is already connected via Embedded Signup
+  const waChannel = useMemo(
+    () => channels?.find((ch: any) => ch.channel === 'whatsapp'),
+    [channels]
+  );
+  const waConnectedViaMeta = !!(waChannel?.waba_id);
+
+  // Load Facebook SDK once
+  useEffect(() => {
+    if (window.FB) return;
+    const script = document.createElement('script');
+    script.src = 'https://connect.facebook.net/en_US/sdk.js';
+    script.async = true;
+    script.defer = true;
+    script.crossOrigin = 'anonymous';
+    document.body.appendChild(script);
+    window.fbAsyncInit = function () {
+      window.FB.init({
+        appId: import.meta.env.VITE_FACEBOOK_APP_ID,
+        autoLogAppEvents: true,
+        xfbml: true,
+        version: 'v21.0',
+      });
+    };
+  }, []);
+
+  async function handleEmbeddedSignup() {
+    if (!window.FB) {
+      toast.error('Facebook SDK aún cargando, intenta en un momento');
+      return;
+    }
+    setConnecting(true);
+    window.FB.login(
+      async (response: any) => {
+        try {
+          if (!response.authResponse) {
+            toast.error('Conexión cancelada');
+            return;
+          }
+          const code   = response.authResponse.code;
+          const wabaId = response.authResponse.waba_id;
+          if (!code || !wabaId) {
+            toast.error('Meta no devolvió el código de autorización. Revisa la configuración del App.');
+            return;
+          }
+          const result = await api.connectWhatsApp(code, wabaId);
+          toast.success(`✅ WhatsApp conectado: ${result.display_phone_number}`);
+          refetch();
+        } catch (err: any) {
+          toast.error('Error al conectar: ' + (err.message || 'Intenta de nuevo'));
+        } finally {
+          setConnecting(false);
+        }
+      },
+      {
+        config_id: import.meta.env.VITE_FACEBOOK_CONFIG_ID,
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: {
+          feature: 'whatsapp_embedded_signup', // activates Coexistence mode
+          sessionInfoVersion: 2,               // includes waba_id in authResponse
+        },
+      }
+    );
+  }
 
   async function handleAdd() {
     if (!newIdentifier.trim()) return;
@@ -68,102 +140,177 @@ function ChannelsTab() {
     refetch();
   }
 
-  const opt = CHANNEL_OPTS.find((c) => c.value === newChannel) ?? CHANNEL_OPTS[0];
+  // For manual channels (SMS, Email): only show non-whatsapp CHANNEL_OPTS
+  const MANUAL_CHANNEL_OPTS = CHANNEL_OPTS.filter((c) => c.value !== 'whatsapp');
+  const opt = MANUAL_CHANNEL_OPTS.find((c) => c.value === newChannel) ?? MANUAL_CHANNEL_OPTS[0];
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-5">
+    <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-6">
       <div>
         <h3 className="text-sm font-bold text-slate-800 mb-1">Canales Conectados</h3>
         <p className="text-xs text-slate-400">
-          Registra tus numeros de WhatsApp, SMS o emails para recibir mensajes de clientes en el inbox.
+          Conecta tu WhatsApp Business y otros canales para recibir mensajes de clientes en el inbox.
         </p>
       </div>
 
-      {/* Existing channels */}
-      {channels && channels.length > 0 ? (
-        <div className="space-y-2">
-          {channels.map((ch: any) => {
-            const cfg = CHANNEL_OPTS.find((c) => c.value === ch.channel);
-            const Icon = cfg?.icon ?? MessageSquare;
-            return (
-              <div key={ch.id} className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 rounded-lg border border-slate-100">
-                <Icon className="w-4 h-4 text-blue-500 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <span className="text-sm font-medium text-slate-700">{ch.identifier}</span>
-                  {ch.label && <span className="text-xs text-slate-400 ml-2">{ch.label}</span>}
-                </div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase bg-slate-100 px-1.5 py-0.5 rounded">
-                  {ch.channel}
-                </span>
-                <button onClick={() => handleDelete(ch.id)} className="text-slate-300 hover:text-red-500 transition-colors">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="text-sm text-slate-400 py-4 text-center">
-          No hay canales configurados. Agrega uno para empezar a recibir mensajes.
-        </p>
-      )}
-
-      {/* Add form */}
-      {adding ? (
-        <div className="border border-blue-200 bg-blue-50/40 rounded-lg p-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <select
-              value={newChannel}
-              onChange={(e) => setNewChannel(e.target.value)}
-              className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {CHANNEL_OPTS.map((c) => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
-            <input
-              type="text"
-              value={newIdentifier}
-              onChange={(e) => setNewIdentifier(e.target.value)}
-              placeholder={opt.placeholder}
-              className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <input
-              type="text"
-              value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
-              placeholder="Etiqueta (opcional)"
-              className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          {newChannel === 'whatsapp' && (
-            <p className="text-[11px] text-amber-600 col-span-3 -mt-1">
-              ⚠ Ingresa el <strong>Phone Number ID</strong> de Meta, no el número de teléfono.
-              Lo encuentras en Meta Developer Console → WhatsApp → API Setup.
-            </p>
+      {/* ── WhatsApp section (Embedded Signup) ── */}
+      <div className="border border-slate-200 rounded-xl p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="w-4 h-4 text-green-600" />
+          <span className="text-sm font-semibold text-slate-800">WhatsApp Business</span>
+          {waConnectedViaMeta && (
+            <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+              <CheckCircle2 className="w-3 h-3" /> Conectado via Meta
+            </span>
           )}
-          <div className="flex gap-2 justify-end">
-            <button onClick={() => setAdding(false)} className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 transition-colors">
-              Cancelar
-            </button>
+        </div>
+
+        {waConnectedViaMeta ? (
+          /* Connected state */
+          <div className="flex items-center gap-3 px-3 py-2.5 bg-green-50 rounded-lg border border-green-100">
+            <MessageSquare className="w-4 h-4 text-green-600 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <span className="text-sm font-medium text-slate-700">{waChannel?.identifier}</span>
+              {waChannel?.label && (
+                <span className="text-xs text-slate-400 ml-2">{waChannel.label}</span>
+              )}
+            </div>
             <button
-              onClick={handleAdd}
-              disabled={saving || !newIdentifier.trim()}
-              className="px-4 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
+              onClick={() => handleDelete(waChannel!.id)}
+              className="text-slate-300 hover:text-red-500 transition-colors"
+              title="Desconectar"
             >
-              {saving ? 'Guardando...' : 'Guardar canal'}
+              <Trash2 className="w-4 h-4" />
             </button>
           </div>
-        </div>
-      ) : (
-        <button
-          onClick={() => setAdding(true)}
-          className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Agregar canal
-        </button>
-      )}
+        ) : waChannel ? (
+          /* Legacy manual entry — show existing row + option to upgrade */
+          <>
+            <div className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 rounded-lg border border-slate-100">
+              <MessageSquare className="w-4 h-4 text-blue-500 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <span className="text-sm font-medium text-slate-700">{waChannel.identifier}</span>
+                {waChannel.label && <span className="text-xs text-slate-400 ml-2">{waChannel.label}</span>}
+              </div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase bg-slate-100 px-1.5 py-0.5 rounded">manual</span>
+              <button onClick={() => handleDelete(waChannel.id)} className="text-slate-300 hover:text-red-500 transition-colors">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              ¿Quieres conectar por Meta para habilitar Coexistence?
+            </p>
+            <button
+              onClick={handleEmbeddedSignup}
+              disabled={connecting}
+              className="flex items-center gap-2 px-4 py-2 bg-[#1877F2] text-white text-sm font-semibold rounded-lg hover:bg-[#166ee1] disabled:opacity-60 transition-colors"
+            >
+              {connecting
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Conectando...</>
+                : <><MessageSquare className="w-4 h-4" /> Conectar con Facebook</>}
+            </button>
+          </>
+        ) : (
+          /* Not connected */
+          <>
+            <p className="text-xs text-slate-500">
+              Conecta tu número de WhatsApp Business en segundos. Tu número sigue activo en la app del teléfono (Coexistence) y el CRM recibe y envía mensajes con IA en paralelo.
+            </p>
+            <button
+              onClick={handleEmbeddedSignup}
+              disabled={connecting}
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#1877F2] text-white text-sm font-semibold rounded-lg hover:bg-[#166ee1] disabled:opacity-60 transition-colors shadow-sm"
+            >
+              {connecting
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Conectando...</>
+                : <><MessageSquare className="w-4 h-4" /> Conectar con Facebook</>}
+            </button>
+            <p className="text-[11px] text-slate-400">
+              🔒 Tu número permanece activo en WhatsApp Business App. No necesitas migrar nada.
+            </p>
+          </>
+        )}
+      </div>
+
+      {/* ── Other channels (SMS, Email) ── */}
+      <div className="space-y-3">
+        <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest">Otros canales</h4>
+
+        {channels && channels.filter((ch: any) => ch.channel !== 'whatsapp').length > 0 ? (
+          <div className="space-y-2">
+            {channels.filter((ch: any) => ch.channel !== 'whatsapp').map((ch: any) => {
+              const cfg = CHANNEL_OPTS.find((c) => c.value === ch.channel);
+              const Icon = cfg?.icon ?? MessageSquare;
+              return (
+                <div key={ch.id} className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 rounded-lg border border-slate-100">
+                  <Icon className="w-4 h-4 text-blue-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium text-slate-700">{ch.identifier}</span>
+                    {ch.label && <span className="text-xs text-slate-400 ml-2">{ch.label}</span>}
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase bg-slate-100 px-1.5 py-0.5 rounded">
+                    {ch.channel}
+                  </span>
+                  <button onClick={() => handleDelete(ch.id)} className="text-slate-300 hover:text-red-500 transition-colors">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {/* Add form for SMS/Email */}
+        {adding ? (
+          <div className="border border-blue-200 bg-blue-50/40 rounded-lg p-4 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <select
+                value={newChannel}
+                onChange={(e) => setNewChannel(e.target.value)}
+                className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {MANUAL_CHANNEL_OPTS.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={newIdentifier}
+                onChange={(e) => setNewIdentifier(e.target.value)}
+                placeholder={opt.placeholder}
+                className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="text"
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                placeholder="Etiqueta (opcional)"
+                className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setAdding(false)} className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 transition-colors">
+                Cancelar
+              </button>
+              <button
+                onClick={handleAdd}
+                disabled={saving || !newIdentifier.trim()}
+                className="px-4 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
+              >
+                {saving ? 'Guardando...' : 'Guardar canal'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setAdding(true)}
+            className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Agregar SMS / Email
+          </button>
+        )}
+      </div>
     </div>
   );
 }

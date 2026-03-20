@@ -61,14 +61,14 @@ export async function checkAndSendReminders(): Promise<void> {
   for (const appt of rows) {
     // Resolve phoneId: prefer channel_numbers table, fallback to env var
     const { rows: channelRows } = await db.query(
-      `SELECT identifier FROM channel_numbers
+      `SELECT identifier, access_token FROM channel_numbers
        WHERE business_id = $1 AND channel = 'whatsapp'
        LIMIT 1`,
       [appt.business_id]
     );
 
-    const phoneId =
-      channelRows[0]?.identifier ?? process.env.META_PHONE_ID ?? '';
+    const phoneId     = channelRows[0]?.identifier   ?? process.env.META_PHONE_ID ?? '';
+    const accessToken = channelRows[0]?.access_token ?? undefined;
 
     if (!phoneId) {
       console.warn(`[Scheduler] No phoneId for business ${appt.business_id} — skipping appt ${appt.id}`);
@@ -82,7 +82,7 @@ export async function checkAndSendReminders(): Promise<void> {
       appt.business_name
     );
 
-    const result = await sendDirectWhatsApp(appt.phone!, message, phoneId);
+    const result = await sendDirectWhatsApp(appt.phone!, message, phoneId, accessToken);
 
     if (result.sent) {
       await db.query(

@@ -181,12 +181,13 @@ router.post('/:id/remind', async (req: AuthenticatedRequest, res) => {
       return res.status(400).json({ sent: false, reason: 'Contact has no phone number' });
     }
 
-    // Resolve phoneId
+    // Resolve per-business phoneId and token
     const { rows: cRows } = await db.query(
-      `SELECT identifier FROM channel_numbers WHERE business_id = $1 AND channel = 'whatsapp' LIMIT 1`,
+      `SELECT identifier, access_token FROM channel_numbers WHERE business_id = $1 AND channel = 'whatsapp' LIMIT 1`,
       [bid]
     );
-    const phoneId = cRows[0]?.identifier ?? process.env.META_PHONE_ID ?? '';
+    const phoneId     = cRows[0]?.identifier   ?? process.env.META_PHONE_ID ?? '';
+    const accessToken = cRows[0]?.access_token ?? undefined;
 
     if (!phoneId) {
       return res.status(400).json({ sent: false, reason: 'No WhatsApp phoneId configured' });
@@ -201,7 +202,7 @@ router.post('/:id/remind', async (req: AuthenticatedRequest, res) => {
       `es el *${dayStr}* a las *${timeStr}*. ¡Te esperamos! 📅\n\n` +
       `Si necesitas cambiar o cancelar, avísanos con tiempo.`;
 
-    const result = await sendDirectWhatsApp(appt.phone, message, phoneId);
+    const result = await sendDirectWhatsApp(appt.phone, message, phoneId, accessToken);
 
     if (result.sent) {
       await db.query(

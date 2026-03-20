@@ -46,10 +46,17 @@ export async function processRetryQueue(): Promise<void> {
     console.log(`[RetryQueue] Processing ${rows.length} pending item(s)`);
   }
 
-  const phoneId = process.env.META_PHONE_ID ?? '';
-
   for (const row of rows) {
-    const result = await sendDirectWhatsApp(row.to_phone, row.content, phoneId);
+    // Resolve per-business phoneId and token; fall back to env vars
+    const { rows: chRows } = await db.query(
+      `SELECT identifier, access_token FROM channel_numbers
+       WHERE business_id = $1 AND channel = 'whatsapp' LIMIT 1`,
+      [row.business_id]
+    );
+    const phoneId     = chRows[0]?.identifier   ?? process.env.META_PHONE_ID ?? '';
+    const accessToken = chRows[0]?.access_token ?? undefined;
+
+    const result = await sendDirectWhatsApp(row.to_phone, row.content, phoneId, accessToken);
 
     if (result.sent) {
       await db.query(

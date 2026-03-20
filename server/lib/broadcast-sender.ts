@@ -28,14 +28,15 @@ export async function executeBroadcast(broadcastId: number): Promise<void> {
   if (bRows.length === 0) return;
   const broadcast = bRows[0];
 
-  // Resolve phoneId for this business
+  // Resolve per-business phoneId and token
   const { rows: chRows } = await db.query(
-    `SELECT identifier FROM channel_numbers
+    `SELECT identifier, access_token FROM channel_numbers
      WHERE business_id = $1 AND channel = 'whatsapp'
      LIMIT 1`,
     [broadcast.business_id]
   );
-  const phoneId = chRows[0]?.identifier ?? process.env.META_PHONE_ID ?? '';
+  const phoneId     = chRows[0]?.identifier   ?? process.env.META_PHONE_ID ?? '';
+  const accessToken = chRows[0]?.access_token ?? undefined;
 
   if (!phoneId) {
     await db.query(
@@ -61,7 +62,7 @@ export async function executeBroadcast(broadcastId: number): Promise<void> {
 
   for (const r of recipients) {
     const text = interpolate(broadcast.message, r.name);
-    const result = await sendDirectWhatsApp(r.phone, text, phoneId);
+    const result = await sendDirectWhatsApp(r.phone, text, phoneId, accessToken);
 
     if (result.sent) {
       await db.query(

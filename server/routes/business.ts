@@ -78,8 +78,9 @@ router.post('/', async (req: AuthenticatedRequest, res) => {
 router.get('/channels', async (req: AuthenticatedRequest, res) => {
   try {
     const businessId = req.user!.business_id;
+    // NOTE: access_token intentionally excluded — never send token to frontend
     const { rows } = await db.query(
-      'SELECT * FROM channel_numbers WHERE business_id = $1 ORDER BY created_at DESC',
+      'SELECT id, business_id, channel, identifier, label, waba_id, created_at FROM channel_numbers WHERE business_id = $1 ORDER BY created_at DESC',
       [businessId],
     );
     res.json(rows);
@@ -106,6 +107,94 @@ router.post('/channels', async (req: AuthenticatedRequest, res) => {
     res.status(201).json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: 'DB Error' });
+  }
+});
+
+// POST /api/business/channels/whatsapp/connect — Embedded Signup with Coexistence
+router.post('/channels/whatsapp/connect', async (req: AuthenticatedRequest, res) => {
+  try {
+    const businessId = req.user!.business_id;
+    const { code, waba_id } = req.body;
+    if (!code || !waba_id) {
+      return res.status(400).json({ error: 'code and waba_id are required' });
+    }
+
+    const appId     = process.env.FACEBOOK_APP_ID;
+    const appSecret = process.env.META_APP_SECRET;
+    if (!appId || !appSecret) {
+      return res.status(500).json({ error: 'FACEBOOK_APP_ID / META_APP_SECRET not configured on server' });
+    }
+
+    // Step 1: Exchange code for short-lived token
+    const tokenRes = await fetch(
+      `https://graph.facebook.com/v19.0/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&code=${encodeURIComponent(code)}`
+    );
+    if (!tokenRes.ok) {
+      const errText = await tokenRes.text();
+      console.error('[WA Connect] Token exchange failed:', errText);
+      return res.status(400).json({ error: `Token exchange failed: ${errText}` });
+    }
+    const { access_token: shortToken } = await tokenRes.json() as { access_token: string };
+
+    // Step 2: Exchange for long-lived token (60-day expiry)
+    const longRes = await fetch(
+      `https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${shortToken}`
+    );
+    if (!longRes.ok) {
+      const errText = await longRes.text();
+      console.error('[WA Connect] Long-lived token exchange failed:', errText);
+      return res.status(400).json({ error: `Long-lived token exchange failed: ${errText}` });
+    }
+    const { access_token: longToken } = await longRes.json() as { access_token: string };
+
+    // Step 3: Fetch phone numbers from WABA
+    const phonesRes = await fetch(
+      `https://graph.facebook.com/v19.0/${waba_id}/phone_numbers?fields=id,display_phone_number,verified_name,status&access_token=${longToken}`
+    );
+    if (!phonesRes.ok) {
+      const errText = await phonesRes.text();
+      console.error('[WA Connect] Phone numbers fetch failed:', errText);
+      return res.status(400).json({ error: `Phone numbers fetch failed: ${errText}` });
+    }
+    const phonesData = await phonesRes.json() as { data: { id: string; display_phone_number: string; verified_name: string }[] };
+    const phoneEntry = phonesData.data?.[0];
+    if (!phoneEntry) {
+      return res.status(400).json({ error: 'No phone numbers found in this WABA' });
+    }
+
+    // Step 4: Subscribe webhooks (non-fatal — log and continue if fails)
+    try {
+      const subRes = await fetch(`https://graph.facebook.com/v19.0/${waba_id}/subscribed_apps`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${longToken}` },
+      });
+      if (!subRes.ok) {
+        console.warn('[WA Connect] Webhook subscription failed:', await subRes.text());
+      }
+    } catch (e) {
+      console.warn('[WA Connect] Webhook subscription error:', e);
+    }
+
+    // Step 5: Upsert into channel_numbers with token and waba_id
+    const label = phoneEntry.verified_name || phoneEntry.display_phone_number;
+    await db.query(
+      `INSERT INTO channel_numbers (business_id, channel, identifier, label, access_token, waba_id)
+       VALUES ($1, 'whatsapp', $2, $3, $4, $5)
+       ON CONFLICT (channel, identifier)
+       DO UPDATE SET business_id=$1, label=$3, access_token=$4, waba_id=$5`,
+      [businessId, phoneEntry.id, label, longToken, waba_id]
+    );
+
+    console.log(`[WA Connect] Business ${businessId} connected phone ${phoneEntry.display_phone_number}`);
+    res.json({
+      success: true,
+      phone_number_id: phoneEntry.id,
+      display_phone_number: phoneEntry.display_phone_number,
+      label,
+    });
+  } catch (err: any) {
+    console.error('[WA Connect] Error:', err);
+    res.status(500).json({ error: err.message || 'Connection failed' });
   }
 });
 

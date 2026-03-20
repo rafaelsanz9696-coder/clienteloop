@@ -240,7 +240,7 @@ export const api = {
 
   // Channel Numbers
   getChannelNumbers: () =>
-    request<{ id: number; business_id: number; channel: string; identifier: string; label: string; created_at: string }[]>(
+    request<{ id: number; business_id: number; channel: string; identifier: string; label: string; waba_id: string | null; created_at: string }[]>(
       `/business/channels?business_id=${_activeBusinessId}`
     ),
   saveChannelNumber: (data: { channel: string; identifier: string; label?: string }) =>
@@ -250,6 +250,11 @@ export const api = {
     ),
   deleteChannelNumber: (id: number) =>
     request<{ success: boolean }>(`/business/channels/${id}`, { method: 'DELETE' }),
+  connectWhatsApp: (code: string, wabaId: string) =>
+    request<{ success: boolean; phone_number_id: string; display_phone_number: string; label: string }>(
+      '/business/channels/whatsapp/connect',
+      { method: 'POST', body: JSON.stringify({ code, waba_id: wabaId }) }
+    ),
 
   // AI Copilot
   copilotChat: (messages: Array<{ role: string; content: string }>) =>
