@@ -135,7 +135,7 @@ function Navbar() {
     <nav className="fixed top-0 w-full z-50 bg-slate-950/80 backdrop-blur-lg border-b border-slate-800/50">
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2.5">
-          <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center font-bold text-white text-sm">CL</div>
+          <img src="/clienteloop_official_app_icon_1774127321038.png" alt="ClienteLoop" className="w-9 h-9 rounded-xl object-cover" />
           <span className="text-lg font-bold text-white tracking-tight">ClienteLoop</span>
         </Link>
         <div className="hidden md:flex items-center gap-8 text-sm text-slate-400">
@@ -544,7 +544,7 @@ function Footer() {
     <footer className="py-10 px-6 border-t border-slate-800">
       <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-white text-xs">CL</div>
+          <img src="/clienteloop_official_app_icon_1774127321038.png" alt="ClienteLoop" className="w-7 h-7 rounded-lg object-cover" />
           <span className="text-sm font-semibold text-white">ClienteLoop</span>
         </div>
         <p className="text-xs text-slate-600">&copy; 2026 ClienteLoop. Hecho para negocios hispanohablantes.</p>

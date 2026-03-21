@@ -293,9 +293,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         {/* Logo — links to landing page */}
         <div className="flex items-center justify-between p-5 border-b border-slate-800">
           <a href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-sm">
-              CL
-            </div>
+            <img src="/clienteloop_official_app_icon_1774127321038.png" alt="ClienteLoop" className="w-8 h-8 rounded-lg object-cover" />
             <span className="font-bold text-lg tracking-tight">ClienteLoop</span>
           </a>
           <button onClick={onClose} className="lg:hidden text-slate-400 hover:text-white">

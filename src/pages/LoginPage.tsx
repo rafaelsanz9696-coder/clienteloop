@@ -19,9 +19,7 @@ function BrandPanel() {
     <div className="hidden lg:flex flex-col justify-between p-12 bg-gradient-to-br from-slate-900 to-blue-950 text-white">
       {/* Logo */}
       <a href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity w-fit">
-        <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center font-bold text-lg">
-          CL
-        </div>
+        <img src="/clienteloop_official_app_icon_1774127321038.png" alt="ClienteLoop" className="w-10 h-10 rounded-xl object-cover" />
         <span className="text-xl font-bold tracking-tight">ClienteLoop</span>
       </a>
 
@@ -134,7 +132,7 @@ export default function LoginPage() {
       <div className="flex flex-col items-center justify-center p-8 sm:p-12">
         {/* Mobile logo */}
         <a href="/" className="lg:hidden flex items-center gap-2 mb-10 hover:opacity-80 transition-opacity">
-          <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center font-bold">CL</div>
+          <img src="/clienteloop_official_app_icon_1774127321038.png" alt="ClienteLoop" className="w-9 h-9 rounded-xl object-cover" />
           <span className="text-lg font-bold text-white tracking-tight">ClienteLoop</span>
         </a>
 
