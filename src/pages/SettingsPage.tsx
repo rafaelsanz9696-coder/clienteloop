@@ -94,27 +94,29 @@ function ChannelsTab() {
     }, 15000);
     try {
       window.FB.login(
-        async (response: any) => {
+        (response: any) => {
           clearTimeout(timeout);
-          try {
-            if (!response.authResponse) {
-              toast.error('Conexión cancelada');
-              return;
-            }
-            const code   = response.authResponse.code;
-            const wabaId = response.authResponse.waba_id;
-            if (!code || !wabaId) {
-              toast.error('Meta no devolvió el código de autorización. Revisa la configuración del App.');
-              return;
-            }
-            const result = await api.connectWhatsApp(code, wabaId);
-            toast.success(`✅ WhatsApp conectado: ${result.display_phone_number}`);
-            refetch();
-          } catch (err: any) {
-            toast.error('Error al conectar: ' + (err.message || 'Intenta de nuevo'));
-          } finally {
+          if (!response.authResponse) {
+            toast.error('Conexión cancelada');
             setConnecting(false);
+            return;
           }
+          const code   = response.authResponse.code;
+          const wabaId = response.authResponse.waba_id;
+          if (!code || !wabaId) {
+            toast.error('Meta no devolvió el código de autorización. Revisa la configuración del App.');
+            setConnecting(false);
+            return;
+          }
+          api.connectWhatsApp(code, wabaId)
+            .then((result) => {
+              toast.success(`✅ WhatsApp conectado: ${result.display_phone_number}`);
+              refetch();
+            })
+            .catch((err: any) => {
+              toast.error('Error al conectar: ' + (err.message || 'Intenta de nuevo'));
+            })
+            .finally(() => setConnecting(false));
         },
         {
           config_id: import.meta.env.VITE_FACEBOOK_CONFIG_ID,
