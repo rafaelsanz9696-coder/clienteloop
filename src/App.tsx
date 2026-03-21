@@ -22,6 +22,8 @@ const ReportsPage       = lazy(() => import('./pages/ReportsPage'));
 const AppointmentsPage  = lazy(() => import('./pages/AppointmentsPage'));
 const BroadcastPage     = lazy(() => import('./pages/BroadcastPage'));
 const BookingPage       = lazy(() => import('./pages/BookingPage'));
+const PrivacyPage       = lazy(() => import('./pages/PrivacyPage'));
+const TermsPage         = lazy(() => import('./pages/TermsPage'));
 
 const PageFallback = () => <LoadingSpinner text="Cargando..." />;
 
@@ -81,6 +83,18 @@ export default function App() {
       <Route path="/book/:slug" element={
         <Suspense fallback={<PageFallback />}>
           <BookingPage />
+        </Suspense>
+      } />
+
+      {/* Legal pages — public, required for Meta App Review */}
+      <Route path="/privacy" element={
+        <Suspense fallback={<PageFallback />}>
+          <PrivacyPage />
+        </Suspense>
+      } />
+      <Route path="/terms" element={
+        <Suspense fallback={<PageFallback />}>
+          <TermsPage />
         </Suspense>
       } />
 
