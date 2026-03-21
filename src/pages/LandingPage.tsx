@@ -549,8 +549,8 @@ function Footer() {
         </div>
         <p className="text-xs text-slate-600">&copy; 2026 ClienteLoop. Hecho para negocios hispanohablantes.</p>
         <div className="flex items-center gap-6 text-xs text-slate-500">
-          <a href="#" className="hover:text-slate-300 transition-colors">Terminos</a>
-          <a href="#" className="hover:text-slate-300 transition-colors">Privacidad</a>
+          <Link to="/terms" className="hover:text-slate-300 transition-colors">Terminos</Link>
+          <Link to="/privacy" className="hover:text-slate-300 transition-colors">Privacidad</Link>
           <a href="mailto:hola@clienteloop.com" className="hover:text-slate-300 transition-colors">Contacto</a>
         </div>
       </div>
