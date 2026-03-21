@@ -82,39 +82,55 @@ function ChannelsTab() {
       toast.error('Facebook SDK aún cargando, intenta en un momento');
       return;
     }
+    if (!import.meta.env.VITE_FACEBOOK_CONFIG_ID) {
+      toast.error('VITE_FACEBOOK_CONFIG_ID no configurado en Vercel');
+      return;
+    }
     setConnecting(true);
-    window.FB.login(
-      async (response: any) => {
-        try {
-          if (!response.authResponse) {
-            toast.error('Conexión cancelada');
-            return;
+    // Safety timeout — reset if FB popup is blocked or never returns
+    const timeout = setTimeout(() => {
+      setConnecting(false);
+      toast.error('El popup de Facebook fue bloqueado. Permite popups para este sitio e intenta de nuevo.');
+    }, 15000);
+    try {
+      window.FB.login(
+        async (response: any) => {
+          clearTimeout(timeout);
+          try {
+            if (!response.authResponse) {
+              toast.error('Conexión cancelada');
+              return;
+            }
+            const code   = response.authResponse.code;
+            const wabaId = response.authResponse.waba_id;
+            if (!code || !wabaId) {
+              toast.error('Meta no devolvió el código de autorización. Revisa la configuración del App.');
+              return;
+            }
+            const result = await api.connectWhatsApp(code, wabaId);
+            toast.success(`✅ WhatsApp conectado: ${result.display_phone_number}`);
+            refetch();
+          } catch (err: any) {
+            toast.error('Error al conectar: ' + (err.message || 'Intenta de nuevo'));
+          } finally {
+            setConnecting(false);
           }
-          const code   = response.authResponse.code;
-          const wabaId = response.authResponse.waba_id;
-          if (!code || !wabaId) {
-            toast.error('Meta no devolvió el código de autorización. Revisa la configuración del App.');
-            return;
-          }
-          const result = await api.connectWhatsApp(code, wabaId);
-          toast.success(`✅ WhatsApp conectado: ${result.display_phone_number}`);
-          refetch();
-        } catch (err: any) {
-          toast.error('Error al conectar: ' + (err.message || 'Intenta de nuevo'));
-        } finally {
-          setConnecting(false);
-        }
-      },
-      {
-        config_id: import.meta.env.VITE_FACEBOOK_CONFIG_ID,
-        response_type: 'code',
-        override_default_response_type: true,
-        extras: {
-          feature: 'whatsapp_embedded_signup', // activates Coexistence mode
-          sessionInfoVersion: 2,               // includes waba_id in authResponse
         },
-      }
-    );
+        {
+          config_id: import.meta.env.VITE_FACEBOOK_CONFIG_ID,
+          response_type: 'code',
+          override_default_response_type: true,
+          extras: {
+            feature: 'whatsapp_embedded_signup',
+            sessionInfoVersion: 2,
+          },
+        }
+      );
+    } catch (err: any) {
+      clearTimeout(timeout);
+      setConnecting(false);
+      toast.error('Error al abrir Facebook: ' + (err.message || 'Intenta de nuevo'));
+    }
   }
 
   async function handleAdd() {
