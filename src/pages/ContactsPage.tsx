@@ -664,6 +664,75 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
   );
 }
 
+// ─── Send Message Modal ───────────────────────────────────────────────────────
+function SendMessageModal({ contact, onClose, onSent }: {
+  contact: Contact;
+  onClose: () => void;
+  onSent: (conversationId: number) => void;
+}) {
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const handleSend = async () => {
+    if (!message.trim()) return;
+    setSending(true);
+    try {
+      const conv = await api.createConversation({ contact_id: contact.id, channel: contact.channel || 'whatsapp' });
+      await api.sendMessage({ conversation_id: conv.id, content: message.trim(), sender: 'agent' });
+      toast.success('Mensaje enviado');
+      onSent(conv.id);
+    } catch (err: any) {
+      toast.error('Error al enviar: ' + (err.message || 'Intenta de nuevo'));
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">Enviar mensaje</h3>
+            <p className="text-sm text-slate-500">{contact.name} · {contact.phone}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 w-fit">
+          <span className={cn('w-2 h-2 rounded-full', contact.channel === 'whatsapp' ? 'bg-green-500' : 'bg-blue-500')} />
+          <span className="text-xs font-medium text-slate-600 capitalize">{contact.channel || 'WhatsApp'}</span>
+        </div>
+
+        <textarea
+          autoFocus
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSend(); }}
+          placeholder="Escribe tu mensaje..."
+          rows={4}
+          className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+
+        <div className="flex gap-2 justify-end">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+            Cancelar
+          </button>
+          <button
+            onClick={handleSend}
+            disabled={!message.trim() || sending}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <Send className="w-4 h-4" />
+            {sending ? 'Enviando...' : 'Enviar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Contacts Page ───────────────────────────────────────────────────────
 export default function ContactsPage() {
   const { activeBusinessId } = useBusiness();
@@ -676,6 +745,7 @@ export default function ContactsPage() {
   const [showImport, setShowImport] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [menuOpen, setMenuOpen] = useState<{ id: number; x: number; y: number } | null>(null);
+  const [sendMsgContact, setSendMsgContact] = useState<Contact | null>(null);
 
   useEffect(() => {
     const close = () => setMenuOpen(null);
@@ -831,6 +901,13 @@ export default function ContactsPage() {
       {showImport && <ImportCSVModal onClose={() => setShowImport(false)} onImported={refetch} />}
       {editingContact && <EditContactModal contact={editingContact} onClose={() => setEditingContact(null)} onSaved={refetch} />}
       {contactId && <ContactDetail contactId={Number(contactId)} onClose={() => navigate('/app/contacts')} onUpdated={refetch} />}
+      {sendMsgContact && (
+        <SendMessageModal
+          contact={sendMsgContact}
+          onClose={() => setSendMsgContact(null)}
+          onSent={(convId) => { setSendMsgContact(null); navigate(`/app/inbox/${convId}`); }}
+        />
+      )}
 
       {menuOpen && (() => {
         const contact = contacts?.find(c => c.id === menuOpen.id);
@@ -840,13 +917,17 @@ export default function ContactsPage() {
             <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(null)} />
             <div className="fixed z-50 bg-white border border-slate-200 rounded-xl shadow-xl py-1 min-w-[180px]"
               style={{ top: menuOpen.y, right: window.innerWidth - menuOpen.x }}>
+              <button onClick={() => { setSendMsgContact(contact); setMenuOpen(null); }}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
+                <Send className="w-4 h-4 text-green-500" /> Enviar mensaje
+              </button>
               <button onClick={() => { setEditingContact(contact); setMenuOpen(null); }}
                 className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
                 <Edit2 className="w-4 h-4 text-blue-500" /> Editar contacto
               </button>
               <button onClick={() => { navigate(`/app/contacts/${contact.id}`); setMenuOpen(null); }}
                 className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
-                <MessageSquare className="w-4 h-4 text-green-500" /> Ver perfil
+                <MessageSquare className="w-4 h-4 text-slate-400" /> Ver perfil
               </button>
               <div className="border-t border-slate-100 my-1" />
               <button onClick={async () => {
