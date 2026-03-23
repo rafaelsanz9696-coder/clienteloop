@@ -234,4 +234,29 @@ Compra Shein, Envío local, Envío internacional, Personal shopper, Consulta pre
   }
 });
 
+// PATCH /api/conversations/:id/unread — mark as unread (set unread_count=1)
+router.patch('/:id/unread', async (req: AuthenticatedRequest, res) => {
+  try {
+    const bid = req.user!.business_id;
+    await db.query('UPDATE conversations SET unread_count=1 WHERE id=$1 AND business_id=$2', [req.params.id, bid]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'DB Error' });
+  }
+});
+
+// DELETE /api/conversations/:id — delete conversation + messages
+router.delete('/:id', async (req: AuthenticatedRequest, res) => {
+  try {
+    const bid = req.user!.business_id;
+    await db.query('DELETE FROM messages WHERE conversation_id=$1', [req.params.id]);
+    await db.query('DELETE FROM conversations WHERE id=$1 AND business_id=$2', [req.params.id, bid]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'DB Error' });
+  }
+});
+
 export default router;

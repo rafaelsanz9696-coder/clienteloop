@@ -18,10 +18,13 @@ import {
   Tag,
   Clock,
   CheckCircle2,
+  CheckCircle,
   Calendar,
   FileText,
   MapPin,
   Paperclip,
+  MoreVertical,
+  Trash2,
 } from 'lucide-react';
 import { cn, formatRelativeTime, getChannelColor, getChannelLabel, getStageLabel, getStageColor } from '../lib/utils';
 import { api } from '../lib/api';
@@ -274,6 +277,7 @@ function ConversationList({
   conversations,
   selectedId,
   onSelect,
+  onRefresh,
   filter,
   onFilterChange,
   intentFilter,
@@ -282,12 +286,14 @@ function ConversationList({
   conversations: Conversation[];
   selectedId: number | null;
   onSelect: (id: number) => void;
+  onRefresh: () => void;
   filter: string;
   onFilterChange: (f: string) => void;
   intentFilter: string;
   onIntentFilterChange: (f: string) => void;
 }) {
   const [search, setSearch] = useState('');
+  const [convMenu, setConvMenu] = useState<{ id: number; x: number; y: number } | null>(null);
 
   // Collect unique intent labels present in the list
   const intentLabels = Array.from(
@@ -382,63 +388,109 @@ function ConversationList({
           </div>
         ) : (
           filtered.map((conv) => (
-            <button
+            <div
               key={conv.id}
-              onClick={() => onSelect(conv.id)}
               className={cn(
-                'w-full text-left p-4 border-b border-slate-50 hover:bg-slate-50 transition-colors',
+                'group relative w-full border-b border-slate-50 hover:bg-slate-50 transition-colors',
                 selectedId === conv.id && 'bg-blue-50 hover:bg-blue-50'
               )}
             >
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-sm font-bold text-slate-500 shrink-0">
-                  {conv.contact_name?.charAt(0) || '?'}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-0.5">
-                    <span className="font-semibold text-sm text-slate-800 truncate">
-                      {conv.contact_name || 'Sin nombre'}
-                    </span>
-                    <span className="text-[11px] text-slate-400 shrink-0 ml-2">
-                      {formatRelativeTime(conv.last_message_at)}
-                    </span>
+              <button
+                onClick={() => onSelect(conv.id)}
+                className="w-full text-left p-4 pr-8"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-sm font-bold text-slate-500 shrink-0">
+                    {conv.contact_name?.charAt(0) || '?'}
                   </div>
-                  <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                    <span
-                      className={cn(
-                        'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium',
-                        getChannelColor(conv.channel)
-                      )}
-                    >
-                      <ChannelIcon channel={conv.channel} className="w-3 h-3" />
-                      {getChannelLabel(conv.channel)}
-                    </span>
-                    {conv.intent_label && (
-                      <IntentBadge label={conv.intent_label} small />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="font-semibold text-sm text-slate-800 truncate">
+                        {conv.contact_name || 'Sin nombre'}
+                      </span>
+                      <span className="text-[11px] text-slate-400 shrink-0 ml-2">
+                        {formatRelativeTime(conv.last_message_at)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                      <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium', getChannelColor(conv.channel))}>
+                        <ChannelIcon channel={conv.channel} className="w-3 h-3" />
+                        {getChannelLabel(conv.channel)}
+                      </span>
+                      {conv.intent_label && <IntentBadge label={conv.intent_label} small />}
+                    </div>
+                    <p className="text-xs text-slate-500 truncate">{conv.last_message}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    {conv.unread_count > 0 && (
+                      <span className="bg-blue-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                        {conv.unread_count}
+                      </span>
+                    )}
+                    {filter === 'followup' && (conv as any).hours_since_last != null && (
+                      <span className="flex items-center gap-0.5 text-[10px] font-medium text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
+                        <Clock className="w-2.5 h-2.5" />
+                        {(conv as any).hours_since_last >= 24
+                          ? `${Math.floor((conv as any).hours_since_last / 24)}d`
+                          : `${Math.floor((conv as any).hours_since_last)}h`}
+                      </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-500 truncate">{conv.last_message}</p>
                 </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  {conv.unread_count > 0 && (
-                    <span className="bg-blue-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
-                      {conv.unread_count}
-                    </span>
-                  )}
-                  {filter === 'followup' && (conv as any).hours_since_last != null && (
-                    <span className="flex items-center gap-0.5 text-[10px] font-medium text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
-                      <Clock className="w-2.5 h-2.5" />
-                      {(conv as any).hours_since_last >= 24
-                        ? `${Math.floor((conv as any).hours_since_last / 24)}d`
-                        : `${Math.floor((conv as any).hours_since_last)}h`}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </button>
+              </button>
+              {/* 3-dot menu button — visible on hover */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                  setConvMenu(convMenu?.id === conv.id ? null : { id: conv.id, x: rect.right, y: rect.bottom + 4 });
+                }}
+                className="absolute top-3 right-2 p-1 rounded-md text-slate-300 hover:text-slate-600 hover:bg-slate-200 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </button>
+            </div>
           ))
         )}
       </div>
+
+      {/* Conversation context menu */}
+      {convMenu && (() => {
+        const conv = conversations.find(c => c.id === convMenu.id);
+        if (!conv) return null;
+        return (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setConvMenu(null)} />
+            <div className="fixed z-50 bg-white border border-slate-200 rounded-xl shadow-xl py-1 min-w-[200px]"
+              style={{ top: convMenu.y, left: Math.min(convMenu.x, window.innerWidth - 210) }}>
+              <button onClick={async () => {
+                const newStatus = conv.status === 'resolved' ? 'open' : 'resolved';
+                await api.updateConversationStatus(conv.id, newStatus);
+                onRefresh(); setConvMenu(null);
+              }} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">
+                <CheckCircle className="w-4 h-4 text-green-500" />
+                {conv.status === 'resolved' ? 'Reabrir conversación' : 'Marcar como resuelto'}
+              </button>
+              <button onClick={async () => {
+                await api.markConversationUnread(conv.id);
+                onRefresh(); setConvMenu(null);
+              }} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">
+                <MessageSquare className="w-4 h-4 text-blue-500" />
+                Marcar como no leído
+              </button>
+              <div className="border-t border-slate-100 my-1" />
+              <button onClick={async () => {
+                if (!confirm('¿Eliminar esta conversación y todos sus mensajes?')) return;
+                await api.deleteConversation(conv.id);
+                onRefresh(); setConvMenu(null);
+              }} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50">
+                <Trash2 className="w-4 h-4" />
+                Eliminar conversación
+              </button>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }
@@ -1149,6 +1201,7 @@ export default function InboxPage() {
           conversations={conversations || []}
           selectedId={selectedId}
           onSelect={handleSelect}
+          onRefresh={refetchConversations}
           filter={filter}
           onFilterChange={setFilter}
           intentFilter={intentFilter}

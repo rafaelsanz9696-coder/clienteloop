@@ -132,6 +132,10 @@ export const api = {
     request<{ success: boolean }>(`/conversations/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   markConversationRead: (id: number) =>
     request<{ success: boolean }>(`/conversations/${id}/read`, { method: 'PATCH' }),
+  markConversationUnread: (id: number) =>
+    request<{ success: boolean }>(`/conversations/${id}/unread`, { method: 'PATCH' }),
+  deleteConversation: (id: number) =>
+    request<{ success: boolean }>(`/conversations/${id}`, { method: 'DELETE' }),
   assignConversation: (id: number, assigned_to: string) =>
     request<{ success: boolean }>(`/conversations/${id}/assign`, { method: 'PATCH', body: JSON.stringify({ assigned_to }) }),
   setConversationIntent: (id: number, intent_label: string | null) =>
