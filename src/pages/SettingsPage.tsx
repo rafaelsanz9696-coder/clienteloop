@@ -35,7 +35,7 @@ const NICHOS = [
 
 // ─── Channel config icons ────────────────────────────────────────────────────
 const CHANNEL_OPTS = [
-  { value: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, placeholder: 'Ej: 1000177549846403' },
+  { value: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, placeholder: 'Ej: 1234567890123456' },
   { value: 'sms', label: 'SMS', icon: Phone, placeholder: '+521234567890' },
   { value: 'email', label: 'Email', icon: Mail, placeholder: 'soporte@minegocio.com' },
 ] as const;
@@ -286,7 +286,7 @@ function ChannelsTab() {
                   type="text"
                   value={waPhoneId}
                   onChange={(e) => setWaPhoneId(e.target.value)}
-                  placeholder="Phone Number ID (ej: 1000177549846403)"
+                  placeholder="Phone Number ID (ej: 1234567890123456)"
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <input
