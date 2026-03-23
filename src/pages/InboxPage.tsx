@@ -874,7 +874,7 @@ function ConversationThread({
           <LoadingSpinner />
         ) : (messages && messages.length > 0) || socketMessages.length > 0 ? (
           <>
-            {[...(messages || []), ...socketMessages].map((msg) => (
+            {[...(messages || []), ...socketMessages.filter(sm => !(messages || []).some(m => m.id === sm.id))].map((msg) => (
               <MessageBubble key={msg.id} message={msg} onExpandImage={setLightboxUrl} />
             ))}
             <div ref={messagesEndRef} />

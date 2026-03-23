@@ -49,6 +49,10 @@ function ChannelsTab() {
   const [newIdentifier, setNewIdentifier] = useState('');
   const [newLabel, setNewLabel] = useState('');
   const [saving, setSaving] = useState(false);
+  const [addingWaManual, setAddingWaManual] = useState(false);
+  const [waPhoneId, setWaPhoneId] = useState('');
+  const [waLabel, setWaLabel] = useState('');
+  const [savingWa, setSavingWa] = useState(false);
   const [connecting, setConnecting] = useState(false);
 
   // Determine if WhatsApp is already connected via Embedded Signup
@@ -135,6 +139,23 @@ function ChannelsTab() {
     }
   }
 
+  async function handleAddWaManual() {
+    if (!waPhoneId.trim()) return;
+    setSavingWa(true);
+    try {
+      await api.saveChannelNumber({ channel: 'whatsapp', identifier: waPhoneId.trim(), label: waLabel.trim() });
+      toast.success('WhatsApp configurado manualmente');
+      setWaPhoneId('');
+      setWaLabel('');
+      setAddingWaManual(false);
+      refetch();
+    } catch (err: any) {
+      toast.error('Error: ' + (err.message || 'Intenta de nuevo'));
+    } finally {
+      setSavingWa(false);
+    }
+  }
+
   async function handleAdd() {
     if (!newIdentifier.trim()) return;
     setSaving(true);
@@ -158,8 +179,8 @@ function ChannelsTab() {
     refetch();
   }
 
-  // For manual channels (SMS, Email): only show non-whatsapp CHANNEL_OPTS
-  const MANUAL_CHANNEL_OPTS = CHANNEL_OPTS.filter((c) => c.value !== 'whatsapp');
+  // For manual channels (SMS, Email, WhatsApp temporal para video)
+  const MANUAL_CHANNEL_OPTS = CHANNEL_OPTS;
   const opt = MANUAL_CHANNEL_OPTS.find((c) => c.value === newChannel) ?? MANUAL_CHANNEL_OPTS[0];
 
   return (
@@ -246,6 +267,49 @@ function ChannelsTab() {
             <p className="text-[11px] text-slate-400">
               🔒 Tu número permanece activo en WhatsApp Business App. No necesitas migrar nada.
             </p>
+
+            {/* Manual fallback */}
+            {!addingWaManual ? (
+              <button
+                onClick={() => setAddingWaManual(true)}
+                className="text-xs text-slate-400 hover:text-slate-600 underline transition-colors"
+              >
+                ¿Prefieres configurar con Phone Number ID manualmente?
+              </button>
+            ) : (
+              <div className="border border-slate-200 rounded-lg p-3 space-y-2 bg-slate-50">
+                <p className="text-xs font-medium text-slate-700">Configuración manual</p>
+                <p className="text-[11px] text-slate-400">
+                  Obtén el <strong>Phone Number ID</strong> en Meta Developer Dashboard → WhatsApp → API Setup
+                </p>
+                <input
+                  type="text"
+                  value={waPhoneId}
+                  onChange={(e) => setWaPhoneId(e.target.value)}
+                  placeholder="Phone Number ID (ej: 1000177549846403)"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <input
+                  type="text"
+                  value={waLabel}
+                  onChange={(e) => setWaLabel(e.target.value)}
+                  placeholder="Etiqueta (ej: Mundo en tus manos)"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <div className="flex gap-2 justify-end">
+                  <button onClick={() => setAddingWaManual(false)} className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700">
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleAddWaManual}
+                    disabled={savingWa || !waPhoneId.trim()}
+                    className="px-4 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                  >
+                    {savingWa ? 'Guardando...' : 'Guardar'}
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -325,7 +389,7 @@ function ChannelsTab() {
             className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Agregar SMS / Email
+            Agregar SMS / Email / WA Prueba
           </button>
         )}
       </div>
