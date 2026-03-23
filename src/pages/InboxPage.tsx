@@ -590,6 +590,14 @@ function ConversationThread({
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [socketMessages, setSocketMessages] = useState<Message[]>([]);
+  const knownMsgIds = useRef<Set<number>>(new Set());
+
+  // Reset socket messages when conversation changes
+  useEffect(() => {
+    setSocketMessages([]);
+    knownMsgIds.current = new Set();
+  }, [conversationId]);
 
   const { data: conversation } = useApi(
     () => api.getConversation(conversationId),
@@ -610,17 +618,22 @@ function ConversationThread({
   const { data: quickReplies } = useApi(() => api.getQuickReplies(), []);
   const { socket, refetchUnread } = useSocket();
 
+  // Track DB-loaded messages so socket dedup works correctly
+  useEffect(() => {
+    if (messages) messages.forEach(m => knownMsgIds.current.add(m.id));
+  }, [messages]);
+
   // Handle incoming websocket messages for this specific conversation thread
   useEffect(() => {
     if (!socket) return;
 
     const handleNewMessage = (payload: { conversation_id: number; message: Message }) => {
       if (payload.conversation_id === conversationId) {
-        // We know we are inside this conversation, add it to the list
-        // Note: useApi does not expose a raw mutate, so we will trigger a refetch for simplicity,
-        // or we could manage a local copy. For a robust app, a local copy is better.
-        // But since we have refetch:
-        refetchMessages();
+        // Append directly from payload — avoid double-fetch dedup issue
+        if (!knownMsgIds.current.has(payload.message.id)) {
+          knownMsgIds.current.add(payload.message.id);
+          setSocketMessages(prev => [...prev, payload.message]);
+        }
       }
     };
 
@@ -640,7 +653,7 @@ function ConversationThread({
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, socketMessages]);
 
   async function handleSend() {
     if (!messageText.trim() || sending) return;
@@ -859,9 +872,9 @@ function ConversationThread({
       <div className="flex-1 overflow-y-auto p-4">
         {messagesLoading ? (
           <LoadingSpinner />
-        ) : messages && messages.length > 0 ? (
+        ) : (messages && messages.length > 0) || socketMessages.length > 0 ? (
           <>
-            {messages.map((msg) => (
+            {[...(messages || []), ...socketMessages].map((msg) => (
               <MessageBubble key={msg.id} message={msg} onExpandImage={setLightboxUrl} />
             ))}
             <div ref={messagesEndRef} />
