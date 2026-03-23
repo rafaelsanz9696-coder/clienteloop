@@ -3,8 +3,9 @@
   "configurations": [
     {
       "name": "clienteloop-dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeExecutable": "/c/Program Files/nodejs/node",
+      "runtimeArgs": ["node_modules/.bin/vite", "--port", "4000"],
+      "cwd": "C:/ClienteLoop/Frontent/leadgen-dashboard",
       "port": 4000
     }
   ]

@@ -60,10 +60,12 @@ router.post('/', async (req: AuthenticatedRequest, res) => {
     const { name, phone, email, channel = 'whatsapp', pipeline_stage = 'new', notes = '' } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required' });
 
+    const cleanPhone = phone ? phone.replace(/\D/g, '') : null;
+
     const { rows } = await db.query(`
       INSERT INTO contacts (business_id, name, phone, email, channel, pipeline_stage, notes)
       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
-    `, [business_id, name, phone || null, email || null, channel, pipeline_stage, notes]);
+    `, [business_id, name, cleanPhone, email || null, channel, pipeline_stage, notes]);
 
     logActivity(business_id, rows[0].id, 'contact_created', `Contacto ${name} creado`);
 
@@ -79,6 +81,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res) => {
   try {
     const bid = req.user!.business_id;
     const { name, phone, email, channel, pipeline_stage, status, notes, tags } = req.body;
+    const cleanPhone = phone ? phone.replace(/\D/g, '') : null;
     const { rows } = await db.query(`
       UPDATE contacts
       SET name=COALESCE($1,name), phone=COALESCE($2,phone), email=COALESCE($3,email),
@@ -86,7 +89,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res) => {
           status=COALESCE($6,status), notes=COALESCE($7,notes), tags=COALESCE($8,tags),
           last_contact_at=CURRENT_TIMESTAMP
       WHERE id=$9 AND business_id=$10 RETURNING *
-    `, [name, phone, email, channel, pipeline_stage, status, notes, tags, req.params.id, bid]);
+    `, [name, cleanPhone, email, channel, pipeline_stage, status, notes, tags, req.params.id, bid]);
 
     if (!rows[0]) return res.status(404).json({ error: 'Contact not found' });
     res.json(rows[0]);

@@ -65,9 +65,9 @@ export function SocketProvider({ children }: { children: ReactNode }) {
             return;
         }
 
-        const wsUrl = import.meta.env.VITE_WEBSOCKET_URL;
+        const wsUrl = import.meta.env.VITE_WEBSOCKET_URL || import.meta.env.VITE_API_URL;
         if (!wsUrl || wsUrl === '/') {
-            console.warn('[Socket] No VITE_WEBSOCKET_URL configured, skipping WebSocket connection.');
+            console.warn('[Socket] No Socket URL configured, skipping WebSocket connection.');
             return;
         }
 

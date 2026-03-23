@@ -61,7 +61,7 @@ async function processIncomingMessage(
 
   if (phone) {
     const { rows: byPhone } = await db.query(
-      'SELECT id FROM contacts WHERE phone = $1 AND business_id = $2',
+      "SELECT id FROM contacts WHERE regexp_replace(phone, '[^0-9]', '', 'g') = $1 AND business_id = $2",
       [phone, businessId],
     );
     if (byPhone.length > 0) {
