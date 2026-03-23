@@ -659,13 +659,17 @@ function ConversationThread({
     if (!messageText.trim() || sending) return;
     setSending(true);
     try {
-      await api.sendMessage({
+      const sent = await api.sendMessage({
         conversation_id: conversationId,
         content: messageText.trim(),
         sender: 'agent',
       });
       setMessageText('');
-      refetchMessages();
+      // Use API response directly — first caller (API or socket) wins via knownMsgIds guard
+      if (!knownMsgIds.current.has(sent.id)) {
+        knownMsgIds.current.add(sent.id);
+        setSocketMessages(prev => [...prev, sent]);
+      }
     } finally {
       setSending(false);
     }
@@ -683,7 +687,7 @@ function ConversationThread({
         : mime.startsWith('audio/') ? 'audio'
         : 'document';
       const content = mediaType === 'document' ? `[documento: ${name}]` : `[${mediaType}]`;
-      await api.sendMediaMessage({
+      const sent = await api.sendMediaMessage({
         conversation_id: conversationId,
         content,
         media_type: mediaType,
@@ -692,7 +696,10 @@ function ConversationThread({
         media_name: mediaType === 'document' ? name : undefined,
         sender: 'agent',
       });
-      refetchMessages();
+      if (!knownMsgIds.current.has(sent.id)) {
+        knownMsgIds.current.add(sent.id);
+        setSocketMessages(prev => [...prev, sent]);
+      }
     } catch (err) {
       console.error('[Media Send]', err);
       toast.error('Error al enviar el archivo. Intenta de nuevo.');
