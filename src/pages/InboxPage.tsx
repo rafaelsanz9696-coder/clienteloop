@@ -693,7 +693,7 @@ function ConversationThread({
     return () => {
       socket.off('new_message', handleNewMessage);
     };
-  }, [socket, conversationId, refetchMessages]);
+  }, [socket, conversationId]);
 
   useEffect(() => {
     api.markConversationRead(conversationId).then(() => {
@@ -1096,28 +1096,6 @@ function ConversationThread({
             className="p-2.5 bg-blue-500 text-white rounded-xl hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
           >
             <Send className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="mt-2 flex justify-center">
-          <button
-            onClick={async () => {
-              // Simulate incoming message via API (requires a new endpoint or using the mock adapter directly)
-              // For simplicity and to not break "delicate" backend, we'll just log it 
-              // but since user wants Extra Polish, let's add a test endpoint in routes/messages.ts
-              try {
-                await api.sendMessage({
-                  conversation_id: conversationId,
-                  content: "Hola, me gustaría pedir informes de sus servicios por favor.",
-                  sender: 'client'
-                });
-                refetchMessages();
-              } catch (e) {
-                console.error(e);
-              }
-            }}
-            className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-blue-500 transition-colors"
-          >
-            • Simular Mensaje Entrante •
           </button>
         </div>
       </div>

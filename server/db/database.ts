@@ -330,6 +330,36 @@ export async function initDb() {
       ALTER TABLE messages ADD COLUMN IF NOT EXISTS location_name TEXT;
     `);
     console.log('[DB] PostgreSQL connected and schema initialized.');
+
+    // One-time dedup: merge contacts that have the same normalized phone number
+    // (created before phone normalization was enforced). Idempotent — safe to re-run.
+    await client.query(`
+      DO $$
+      DECLARE r RECORD;
+      BEGIN
+        FOR r IN
+          SELECT dup.id AS dup_id, canon.id AS canon_id
+          FROM contacts dup
+          JOIN (
+            SELECT DISTINCT ON (regexp_replace(phone,'[^0-9]','','g'), business_id)
+              id, business_id, regexp_replace(phone,'[^0-9]','','g') AS norm
+            FROM contacts
+            WHERE phone IS NOT NULL AND phone != ''
+            ORDER BY regexp_replace(phone,'[^0-9]','','g'), business_id, id ASC
+          ) canon ON (
+            regexp_replace(dup.phone,'[^0-9]','','g') = canon.norm
+            AND dup.business_id = canon.business_id
+            AND dup.id != canon.id
+          )
+        LOOP
+          UPDATE conversations  SET contact_id = r.canon_id WHERE contact_id = r.dup_id;
+          UPDATE tasks          SET contact_id = r.canon_id WHERE contact_id = r.dup_id;
+          UPDATE pipeline_deals SET contact_id = r.canon_id WHERE contact_id = r.dup_id;
+          UPDATE appointments   SET contact_id = r.canon_id WHERE contact_id = r.dup_id;
+          DELETE FROM contacts WHERE id = r.dup_id;
+        END LOOP;
+      END $$;
+    `);
   } catch (err) {
     console.error('[DB] Failed to initialize schema:', err);
   } finally {
