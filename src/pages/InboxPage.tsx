@@ -1164,7 +1164,10 @@ export default function InboxPage() {
     navigate(`/app/inbox/${id}`);
   }
 
-  if (loading) return <LoadingSpinner text="Cargando conversaciones..." />;
+  // Only block render on initial load (no data yet). Background refetches (socket events)
+  // must NOT trigger loading state here — that would unmount ConversationThread and reset
+  // knownMsgIds, causing duplicate messages in the thread.
+  if (loading && !conversations) return <LoadingSpinner text="Cargando conversaciones..." />;
 
   return (
     <div className="flex h-full">
