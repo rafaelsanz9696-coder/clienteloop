@@ -919,9 +919,11 @@ function ConversationThread({
           <LoadingSpinner />
         ) : messages && messages.length > 0 ? (
           <>
-            {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} onExpandImage={setLightboxUrl} />
-            ))}
+            {messages
+              .filter((msg, idx, arr) => arr.findIndex(m => m.id === msg.id) === idx)
+              .map((msg) => (
+                <MessageBubble key={msg.id} message={msg} onExpandImage={setLightboxUrl} />
+              ))}
             <div ref={messagesEndRef} />
           </>
         ) : (
