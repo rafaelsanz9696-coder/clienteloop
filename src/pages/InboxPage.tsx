@@ -642,14 +642,6 @@ function ConversationThread({
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  // knownMsgIds: dedup guard so socket events and HTTP responses never add the same message twice
-  const knownMsgIds = useRef<Set<number>>(new Set());
-
-  // Reset dedup set when conversation changes
-  useEffect(() => {
-    knownMsgIds.current = new Set();
-  }, [conversationId]);
-
   const { data: conversation } = useApi(
     () => api.getConversation(conversationId),
     [conversationId]
@@ -669,21 +661,18 @@ function ConversationThread({
   const { data: quickReplies } = useApi(() => api.getQuickReplies(), []);
   const { socket, refetchUnread } = useSocket();
 
-  // Seed knownMsgIds from DB-fetched messages so socket events don't duplicate them
-  useEffect(() => {
-    if (messages) messages.forEach(m => knownMsgIds.current.add(m.id));
-  }, [messages]);
-
-  // Real-time: append incoming socket messages directly to messages state (no separate array)
+  // Real-time: append socket messages atomically — the functional updater checks prev state
+  // so React processes dedup as a single atomic operation (no ref needed, no race condition)
   useEffect(() => {
     if (!socket) return;
 
     const handleNewMessage = (payload: { conversation_id: number; message: Message }) => {
       if (payload.conversation_id === conversationId) {
-        if (!knownMsgIds.current.has(payload.message.id)) {
-          knownMsgIds.current.add(payload.message.id);
-          setMessages(prev => prev ? [...prev, payload.message] : [payload.message]);
-        }
+        setMessages(prev => {
+          if (!prev) return [payload.message];
+          if (prev.some(m => m.id === payload.message.id)) return prev; // already present
+          return [...prev, payload.message];
+        });
       }
     };
 
@@ -713,10 +702,11 @@ function ConversationThread({
         sender: 'agent',
       });
       setMessageText('');
-      if (!knownMsgIds.current.has(sent.id)) {
-        knownMsgIds.current.add(sent.id);
-        setMessages(prev => prev ? [...prev, sent] : [sent]);
-      }
+      setMessages(prev => {
+        if (!prev) return [sent];
+        if (prev.some(m => m.id === sent.id)) return prev;
+        return [...prev, sent];
+      });
     } finally {
       setSending(false);
     }
@@ -743,10 +733,11 @@ function ConversationThread({
         media_name: mediaType === 'document' ? name : undefined,
         sender: 'agent',
       });
-      if (!knownMsgIds.current.has(sent.id)) {
-        knownMsgIds.current.add(sent.id);
-        setMessages(prev => prev ? [...prev, sent] : [sent]);
-      }
+      setMessages(prev => {
+        if (!prev) return [sent];
+        if (prev.some(m => m.id === sent.id)) return prev;
+        return [...prev, sent];
+      });
     } catch (err) {
       console.error('[Media Send]', err);
       toast.error('Error al enviar el archivo. Intenta de nuevo.');
@@ -1139,7 +1130,7 @@ export default function InboxPage() {
   const { socket } = useSocket();
 
   // Update conversation list in real-time WITHOUT calling refetchConversations (which sets
-  // loading=true and would unmount ConversationThread, resetting knownMsgIds and causing duplication).
+  // loading=true and would unmount ConversationThread, causing duplication).
   // Instead, update local state directly via setConversations.
   useEffect(() => {
     if (!socket) return;
