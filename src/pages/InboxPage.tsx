@@ -642,12 +642,11 @@ function ConversationThread({
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [socketMessages, setSocketMessages] = useState<Message[]>([]);
+  // knownMsgIds: dedup guard so socket events and HTTP responses never add the same message twice
   const knownMsgIds = useRef<Set<number>>(new Set());
 
-  // Reset socket messages when conversation changes
+  // Reset dedup set when conversation changes
   useEffect(() => {
-    setSocketMessages([]);
     knownMsgIds.current = new Set();
   }, [conversationId]);
 
@@ -665,26 +664,25 @@ function ConversationThread({
   const {
     data: messages,
     loading: messagesLoading,
-    refetch: refetchMessages,
+    setData: setMessages,
   } = useApi(() => api.getMessages(conversationId), [conversationId]);
   const { data: quickReplies } = useApi(() => api.getQuickReplies(), []);
   const { socket, refetchUnread } = useSocket();
 
-  // Track DB-loaded messages so socket dedup works correctly
+  // Seed knownMsgIds from DB-fetched messages so socket events don't duplicate them
   useEffect(() => {
     if (messages) messages.forEach(m => knownMsgIds.current.add(m.id));
   }, [messages]);
 
-  // Handle incoming websocket messages for this specific conversation thread
+  // Real-time: append incoming socket messages directly to messages state (no separate array)
   useEffect(() => {
     if (!socket) return;
 
     const handleNewMessage = (payload: { conversation_id: number; message: Message }) => {
       if (payload.conversation_id === conversationId) {
-        // Append directly from payload — avoid double-fetch dedup issue
         if (!knownMsgIds.current.has(payload.message.id)) {
           knownMsgIds.current.add(payload.message.id);
-          setSocketMessages(prev => [...prev, payload.message]);
+          setMessages(prev => prev ? [...prev, payload.message] : [payload.message]);
         }
       }
     };
@@ -693,19 +691,17 @@ function ConversationThread({
     return () => {
       socket.off('new_message', handleNewMessage);
     };
-  }, [socket, conversationId]);
+  }, [socket, conversationId, setMessages]);
 
   useEffect(() => {
     api.markConversationRead(conversationId).then(() => {
-      refetchUnread(); // Refresh global unread badge after marking read
-    }).catch(() => {
-      // Non-critical, ignore errors silently
-    });
+      refetchUnread();
+    }).catch(() => {});
   }, [conversationId, refetchUnread]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, socketMessages]);
+  }, [messages]);
 
   async function handleSend() {
     if (!messageText.trim() || sending) return;
@@ -717,10 +713,9 @@ function ConversationThread({
         sender: 'agent',
       });
       setMessageText('');
-      // Use API response directly — first caller (API or socket) wins via knownMsgIds guard
       if (!knownMsgIds.current.has(sent.id)) {
         knownMsgIds.current.add(sent.id);
-        setSocketMessages(prev => [...prev, sent]);
+        setMessages(prev => prev ? [...prev, sent] : [sent]);
       }
     } finally {
       setSending(false);
@@ -750,7 +745,7 @@ function ConversationThread({
       });
       if (!knownMsgIds.current.has(sent.id)) {
         knownMsgIds.current.add(sent.id);
-        setSocketMessages(prev => [...prev, sent]);
+        setMessages(prev => prev ? [...prev, sent] : [sent]);
       }
     } catch (err) {
       console.error('[Media Send]', err);
@@ -931,9 +926,9 @@ function ConversationThread({
       <div className="flex-1 overflow-y-auto p-4">
         {messagesLoading ? (
           <LoadingSpinner />
-        ) : (messages && messages.length > 0) || socketMessages.length > 0 ? (
+        ) : messages && messages.length > 0 ? (
           <>
-            {[...(messages || []), ...socketMessages.filter(sm => !(messages || []).some(m => m.id === sm.id))].map((msg) => (
+            {messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} onExpandImage={setLightboxUrl} />
             ))}
             <div ref={messagesEndRef} />
@@ -1131,7 +1126,7 @@ export default function InboxPage() {
   const [filter, setFilter] = useState('all');
   const [intentFilter, setIntentFilter] = useState('');
 
-  const { data: conversations, loading, refetch: refetchConversations } = useApi(
+  const { data: conversations, loading, refetch: refetchConversations, setData: setConversations } = useApi(
     () =>
       filter === 'followup'
         ? api.getFollowUpConversations()
@@ -1143,20 +1138,34 @@ export default function InboxPage() {
 
   const { socket } = useSocket();
 
-  // Handle incoming websocket messages for the conversation list
+  // Update conversation list in real-time WITHOUT calling refetchConversations (which sets
+  // loading=true and would unmount ConversationThread, resetting knownMsgIds and causing duplication).
+  // Instead, update local state directly via setConversations.
   useEffect(() => {
     if (!socket) return;
 
-    const handleNewMessageList = (_payload: { conversation_id: number; message: Message }) => {
-      // Something changed, let's just refetch the list so it order correctly and updates unread count
-      refetchConversations();
+    const handleNewMessageList = (payload: { conversation_id: number; message: Message }) => {
+      setConversations(prev => {
+        if (!prev) return prev;
+        const exists = prev.some(c => c.id === payload.conversation_id);
+        if (!exists) return prev; // new conversation — will appear on next filter change / navigation
+        return prev
+          .map(c => c.id === payload.conversation_id
+            ? { ...c, last_message: payload.message.content, last_message_at: payload.message.created_at }
+            : c
+          )
+          .sort((a, b) =>
+            new Date(b.last_message_at || b.created_at).getTime() -
+            new Date(a.last_message_at || a.created_at).getTime()
+          );
+      });
     };
 
     socket.on('new_message', handleNewMessageList);
     return () => {
       socket.off('new_message', handleNewMessageList);
     };
-  }, [socket, refetchConversations]);
+  }, [socket, setConversations]);
 
   const selectedId = conversationId ? Number(conversationId) : null;
 
