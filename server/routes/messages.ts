@@ -97,7 +97,7 @@ router.post('/', async (req: AuthenticatedRequest, res) => {
           mime: media_mime as string | undefined,
           name: media_name as string | undefined,
         } : undefined;
-        sendChannelMessage(convRows[0].channel, Number(conversation_id), content, mediaArg);
+        sendChannelMessage(convRows[0].channel, Number(conversation_id), content, mediaArg, newMsg[0].id);
       }
     }
   } catch (err) {

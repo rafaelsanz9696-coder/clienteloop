@@ -23,31 +23,15 @@ export async function sendChannelMessage(
   conversationId: number,
   text: string,
   media?: { type: string; url: string; mime?: string; name?: string },
+  existingMessageId?: number, // if already persisted by caller, skip DB insert in adapter
 ): Promise<void> {
   if (process.env.ENABLE_CHANNELS !== 'true') {
     return; // Channels disabled via env flag
   }
 
-  // We just rely on individual adapters configuring themselves
-  // Fetch contact details (phone + email) for this conversation
-  const { rows } = await db.query(
-    `SELECT ct.phone, ct.email
-       FROM conversations c
-       JOIN contacts ct ON ct.id = c.contact_id
-       WHERE c.id = $1`,
-    [conversationId],
-  );
-
-  if (rows.length === 0) {
-    console.warn(`[ChannelRouter] Conversation ${conversationId} not found.`);
-    return;
-  }
-
-  const { phone, email } = rows[0];
-
   switch (channel.toLowerCase()) {
     case 'whatsapp':
-      await WhatsAppAdapter.sendMessage(conversationId, text, media);
+      await WhatsAppAdapter.sendMessage(conversationId, text, media, existingMessageId);
       break;
 
     default:

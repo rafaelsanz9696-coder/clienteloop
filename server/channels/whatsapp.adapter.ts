@@ -62,32 +62,42 @@ export const WhatsAppAdapter = {
     conversationId: number,
     text: string,
     media?: { type: string; url: string; mime?: string; name?: string },
+    existingMessageId?: number, // provided by messages.ts when message is already in DB
   ) {
     console.log(`[WhatsApp] Sending message to conversation ${conversationId}: ${text}`);
 
-    // Always log it in our database regardless of real/mock
-    const { rows } = await db.query(`
-      INSERT INTO messages
-        (conversation_id, content, sender, is_ai_generated, media_type, media_url, media_mime, media_name)
-      VALUES ($1, $2, 'agent', 0, $3, $4, $5, $6) RETURNING *
-    `, [conversationId, text, media?.type ?? null, media?.url ?? null, media?.mime ?? null, media?.name ?? null]);
+    let msgId: number;
 
-    const newMsg = rows[0];
-
-    // Emit to socket room
+    // Fetch business_id (always needed for channel lookup and Meta send)
     const { rows: bRows } = await db.query('SELECT business_id FROM conversations WHERE id = $1', [conversationId]);
-    if (bRows.length > 0) {
-      getIo().to(`business_${bRows[0].business_id}`).emit('new_message', {
-        conversation_id: conversationId,
-        message: newMsg
-      });
-    }
 
-    await db.query(`
-      UPDATE conversations
-      SET last_message = $1, last_message_at = CURRENT_TIMESTAMP
-      WHERE id = $2
-    `, [text, conversationId]);
+    if (existingMessageId) {
+      // Message was already inserted and socket-emitted by the HTTP route — skip both
+      msgId = existingMessageId;
+    } else {
+      // Automation path (AI auto-reply): insert to DB and emit socket
+      const { rows } = await db.query(`
+        INSERT INTO messages
+          (conversation_id, content, sender, is_ai_generated, media_type, media_url, media_mime, media_name)
+        VALUES ($1, $2, 'agent', 0, $3, $4, $5, $6) RETURNING *
+      `, [conversationId, text, media?.type ?? null, media?.url ?? null, media?.mime ?? null, media?.name ?? null]);
+
+      const newMsg = rows[0];
+      msgId = newMsg.id;
+
+      if (bRows.length > 0) {
+        getIo().to(`business_${bRows[0].business_id}`).emit('new_message', {
+          conversation_id: conversationId,
+          message: newMsg
+        });
+      }
+
+      await db.query(`
+        UPDATE conversations
+        SET last_message = $1, last_message_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+      `, [text, conversationId]);
+    }
 
     // If real channels are enabled, send via Meta API
     if (process.env.ENABLE_CHANNELS === 'true') {
@@ -102,7 +112,7 @@ export const WhatsAppAdapter = {
 
       if (!token || !phoneId) {
         console.warn('[WhatsApp] Meta credentials missing (no channel_numbers row and no env vars)');
-        return { success: true, messageId: newMsg.id };
+        return { success: true, messageId: msgId };
       }
 
       const { rows: cRows } = await db.query(`
@@ -156,20 +166,20 @@ export const WhatsAppAdapter = {
           if (!response.ok) {
             const errText = await response.text();
             console.error(`[WhatsApp API] Error ${response.status}:`, errText);
-            await enqueueRetry(bRows[0]?.business_id ?? null, conversationId, phone, text, newMsg.id);
+            await enqueueRetry(bRows[0]?.business_id ?? null, conversationId, phone, text, msgId);
           } else {
             console.log(`[WhatsApp API] Message dynamically sent to ${phone}`);
           }
         } catch (error) {
           console.error(`[WhatsApp API] Failed to send message:`, error);
-          await enqueueRetry(bRows[0]?.business_id ?? null, conversationId, phone, text, newMsg.id);
+          await enqueueRetry(bRows[0]?.business_id ?? null, conversationId, phone, text, msgId);
         }
       } else {
         console.warn(`[WhatsApp API] No phone number found for conversation ${conversationId}`);
       }
     }
 
-    return { success: true, messageId: newMsg.id };
+    return { success: true, messageId: msgId };
   },
 
   async receiveMessage(conversationId: number, text: string) {
