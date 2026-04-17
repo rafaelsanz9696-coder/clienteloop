@@ -99,7 +99,7 @@ const faqs = [
   },
   {
     q: '¿Puedo manejar varios negocios desde una sola cuenta?',
-    a: 'Sí. El plan Pro incluye hasta 3 negocios y el plan Agency ilimitados. Cambias de negocio en un clic desde el panel lateral. Ideal para agencias y emprendedores con múltiples marcas.',
+    a: 'Sí. Con tu cuenta puedes gestionar múltiples negocios y cambiar entre ellos en un clic desde el panel lateral. Ideal para emprendedores con múltiples marcas o agencias.',
   },
   {
     q: '¿Puedo cancelar en cualquier momento?',
@@ -355,126 +355,64 @@ function Testimonials() {
   );
 }
 
-const plans = [
-  {
-    name: 'Starter',
-    price: '$99',
-    desc: 'Para un negocio que quiere crecer',
-    highlight: false,
-    badge: null,
-    features: [
-      '1 negocio',
-      'Hasta 3 agentes humanos',
-      'Inbox unificado (WA + IG + Email)',
-      'CRM completo con pipeline visual',
-      'Agente de IA especializado en tu nicho',
-      'Memoria Agentica',
-      'Soporte directo en español',
-    ],
-    cta: 'Comenzar gratis',
-    ctaNote: 'Sin tarjeta de crédito',
-  },
-  {
-    name: 'Pro',
-    price: '$149',
-    desc: 'Para negocios que manejan múltiples marcas',
-    highlight: true,
-    badge: 'Más popular',
-    features: [
-      'Hasta 3 negocios',
-      'Hasta 5 agentes humanos',
-      'Todo lo de Starter',
-      'Cambio de negocio en 1 clic',
-      'Insights y sugerencias proactivas',
-      'Copilot IA con 12 herramientas',
-      'Soporte prioritario',
-    ],
-    cta: 'Elegir Pro',
-    ctaNote: '14 días de prueba gratis',
-  },
-  {
-    name: 'Agency',
-    price: '$249',
-    desc: 'Para agencias que gestionan clientes',
-    highlight: false,
-    badge: null,
-    features: [
-      'Negocios ilimitados',
-      'Hasta 10 agentes humanos',
-      'Todo lo de Pro',
-      'Dashboard multi-cuenta',
-      'Agentes extra a $19/mes c/u',
-      'Onboarding dedicado',
-      'Soporte VIP 24/7',
-    ],
-    cta: 'Elegir Agency',
-    ctaNote: '14 días de prueba gratis',
-  },
-];
+const singlePlan = {
+  price: '$97',
+  desc: 'Todo lo que tu negocio necesita para nunca perder un cliente',
+  features: [
+    'Inbox unificado (WhatsApp + IG + Email)',
+    'CRM completo con pipeline visual',
+    'Agente de IA especializado en tu nicho',
+    'Memoria Agentica — aprende de tu negocio',
+    'Hasta 3 agentes humanos incluidos',
+    'Recordatorios automáticos de citas',
+    'Copilot IA con 12 herramientas',
+    'Difusión masiva por WhatsApp',
+    'Página de booking pública',
+    'Soporte directo en español',
+  ],
+  cta: 'Comenzar gratis',
+  ctaNote: 'Sin tarjeta de crédito · Cancela cuando quieras',
+};
 
 function Pricing() {
   return (
     <section id="pricing" className="py-20 px-6">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-2xl mx-auto">
         <div className="text-center mb-14">
-          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">Planes que crecen contigo</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">Un solo plan. Todo incluido.</h2>
           <p className="text-slate-400">
-            Empieza con un negocio y escala sin límite. Sin contratos, cancela cuando quieras.
+            Sin niveles, sin sorpresas. Un precio fijo y acceso a todo desde el primer día.
           </p>
         </div>
 
-        <div className="grid sm:grid-cols-3 gap-6">
-          {plans.map((plan) => (
-            <div
-              key={plan.name}
-              className={cn(
-                'relative rounded-2xl p-7 flex flex-col border transition-all',
-                plan.highlight
-                  ? 'bg-gradient-to-b from-blue-950/60 to-slate-900 border-blue-500/50 shadow-2xl shadow-blue-900/30 scale-[1.03]'
-                  : 'bg-slate-900/50 border-slate-800'
-              )}
-            >
-              {plan.badge && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-blue-600 rounded-full text-xs font-bold text-white whitespace-nowrap">
-                  {plan.badge}
-                </div>
-              )}
+        <div className="relative rounded-2xl p-8 flex flex-col border bg-gradient-to-b from-blue-950/60 to-slate-900 border-blue-500/50 shadow-2xl shadow-blue-900/30">
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-blue-600 rounded-full text-xs font-bold text-white whitespace-nowrap">
+            Todo incluido
+          </div>
 
-              <h3 className={cn('font-bold text-lg mb-1', plan.highlight ? 'text-white' : 'text-slate-300')}>
-                {plan.name}
-              </h3>
-              <p className="text-xs text-slate-500 mb-4 leading-snug">{plan.desc}</p>
+          <p className="text-slate-400 text-sm mb-6 text-center">{singlePlan.desc}</p>
 
-              <div className="flex items-baseline gap-1 mb-6">
-                <span className={cn('text-4xl font-black', plan.highlight ? 'text-white' : 'text-slate-200')}>
-                  {plan.price}
-                </span>
-                <span className="text-slate-500 text-sm">USD/mes</span>
-              </div>
+          <div className="flex items-baseline gap-1 mb-8 justify-center">
+            <span className="text-6xl font-black text-white">{singlePlan.price}</span>
+            <span className="text-slate-400 text-base">USD/mes</span>
+          </div>
 
-              <ul className="space-y-3 mb-8 flex-1">
-                {plan.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2.5 text-sm text-slate-300">
-                    <Check className={cn('w-4 h-4 mt-0.5 shrink-0', plan.highlight ? 'text-blue-400' : 'text-slate-500')} />
-                    <span className="leading-snug">{f}</span>
-                  </li>
-                ))}
-              </ul>
+          <ul className="grid sm:grid-cols-2 gap-3 mb-8">
+            {singlePlan.features.map((f) => (
+              <li key={f} className="flex items-start gap-2.5 text-sm text-slate-300">
+                <Check className="w-4 h-4 mt-0.5 shrink-0 text-blue-400" />
+                <span className="leading-snug">{f}</span>
+              </li>
+            ))}
+          </ul>
 
-              <Link
-                to="/login?tab=signup"
-                className={cn(
-                  'flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-bold transition-all',
-                  plan.highlight
-                    ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/40'
-                    : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                )}
-              >
-                {plan.cta} <ArrowRight className="w-4 h-4" />
-              </Link>
-              <p className="text-center text-xs text-slate-600 mt-2">{plan.ctaNote}</p>
-            </div>
-          ))}
+          <Link
+            to="/login?tab=signup"
+            className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl text-sm font-bold transition-all bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/40"
+          >
+            {singlePlan.cta} <ArrowRight className="w-4 h-4" />
+          </Link>
+          <p className="text-center text-xs text-slate-500 mt-3">{singlePlan.ctaNote}</p>
         </div>
       </div>
     </section>
