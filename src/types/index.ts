@@ -69,7 +69,7 @@ export interface Conversation {
   intent_label?: string | null;
 }
 
-export type MediaType = 'image' | 'document' | 'audio' | 'video' | 'sticker' | 'location';
+export type MediaType = 'image' | 'document' | 'audio' | 'video' | 'sticker' | 'location' | 'interactive';
 
 export interface Message {
   id: number;

@@ -61,7 +61,7 @@ export const WhatsAppAdapter = {
   async sendMessage(
     conversationId: number,
     text: string,
-    media?: { type: string; url: string; mime?: string; name?: string },
+    media?: { type: string; url?: string; mime?: string; name?: string; lat?: number; lng?: number; locationName?: string; buttons?: { id: string; title: string }[] },
     existingMessageId?: number, // provided by messages.ts when message is already in DB
   ) {
     console.log(`[WhatsApp] Sending message to conversation ${conversationId}: ${text}`);
@@ -126,22 +126,54 @@ export const WhatsAppAdapter = {
 
       if (phone) {
         try {
-          // Build Meta payload — media or text
+          // Build Meta payload — support all WA media types
           let metaPayload: Record<string, unknown>;
           const cleanTo = phone.replace(/\D/g, '');
-          if (media?.url) {
+
+          if (media?.type === 'location' && media.lat != null && media.lng != null) {
+            metaPayload = {
+              messaging_product: 'whatsapp', recipient_type: 'individual', to: cleanTo,
+              type: 'location',
+              location: { latitude: media.lat, longitude: media.lng, name: media.locationName || '', address: media.locationName || '' },
+            };
+          } else if (media?.type === 'interactive' && media.buttons?.length) {
+            metaPayload = {
+              messaging_product: 'whatsapp', recipient_type: 'individual', to: cleanTo,
+              type: 'interactive',
+              interactive: {
+                type: 'button',
+                body: { text },
+                action: { buttons: media.buttons.map(b => ({ type: 'reply', reply: { id: b.id, title: b.title } })) },
+              },
+            };
+          } else if (media?.url) {
             if (media.type === 'image') {
               metaPayload = {
                 messaging_product: 'whatsapp', recipient_type: 'individual', to: cleanTo,
-                type: 'image', image: { link: media.url },
+                type: 'image', image: { link: media.url, ...(text ? { caption: text } : {}) },
               };
             } else if (media.type === 'document') {
               metaPayload = {
                 messaging_product: 'whatsapp', recipient_type: 'individual', to: cleanTo,
                 type: 'document', document: { link: media.url, filename: media.name || 'documento' },
               };
+            } else if (media.type === 'audio') {
+              metaPayload = {
+                messaging_product: 'whatsapp', recipient_type: 'individual', to: cleanTo,
+                type: 'audio', audio: { link: media.url },
+              };
+            } else if (media.type === 'video') {
+              metaPayload = {
+                messaging_product: 'whatsapp', recipient_type: 'individual', to: cleanTo,
+                type: 'video', video: { link: media.url, ...(text ? { caption: text } : {}) },
+              };
+            } else if (media.type === 'sticker') {
+              metaPayload = {
+                messaging_product: 'whatsapp', recipient_type: 'individual', to: cleanTo,
+                type: 'sticker', sticker: { link: media.url },
+              };
             } else {
-              // Fallback for other media types: send as text with link
+              // Fallback: send as text with link
               metaPayload = {
                 messaging_product: 'whatsapp', recipient_type: 'individual', to: cleanTo,
                 type: 'text', text: { preview_url: true, body: `${text}\n${media.url}` },

@@ -159,9 +159,13 @@ export const api = {
     conversation_id: number;
     content: string;
     media_type: string;
-    media_url: string;
-    media_mime: string;
+    media_url?: string;
+    media_mime?: string;
     media_name?: string;
+    location_lat?: number;
+    location_lng?: number;
+    location_name?: string;
+    interactive_buttons?: { id: string; title: string }[];
     sender?: string;
   }) => request<Message>('/messages', { method: 'POST', body: JSON.stringify(data) }),
 

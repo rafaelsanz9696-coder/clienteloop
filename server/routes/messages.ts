@@ -40,6 +40,8 @@ router.post('/', async (req: AuthenticatedRequest, res) => {
     const {
       conversation_id, content, sender = 'agent', is_ai_generated = false,
       media_type, media_url, media_mime, media_name,
+      location_lat, location_lng, location_name,
+      interactive_buttons,
     } = req.body;
     if (!conversation_id || !content) {
       return res.status(400).json({ error: 'conversation_id and content are required' });
@@ -55,11 +57,13 @@ router.post('/', async (req: AuthenticatedRequest, res) => {
     const { rows: newMsg } = await db.query(`
       INSERT INTO messages
         (conversation_id, content, sender, is_ai_generated,
-         media_type, media_url, media_mime, media_name)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *
+         media_type, media_url, media_mime, media_name,
+         location_lat, location_lng, location_name)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *
     `, [
       conversation_id, content, sender, is_ai_generated ? 1 : 0,
       media_type ?? null, media_url ?? null, media_mime ?? null, media_name ?? null,
+      location_lat ?? null, location_lng ?? null, location_name ?? null,
     ]);
 
     // Update conversation last message
@@ -91,12 +95,14 @@ router.post('/', async (req: AuthenticatedRequest, res) => {
         [conversation_id],
       );
       if (convRows.length > 0) {
-        const mediaArg = media_url ? {
-          type: media_type as string,
-          url: media_url as string,
-          mime: media_mime as string | undefined,
-          name: media_name as string | undefined,
-        } : undefined;
+        let mediaArg: Parameters<typeof sendChannelMessage>[3] | undefined;
+        if (media_type === 'location' && location_lat != null && location_lng != null) {
+          mediaArg = { type: 'location', lat: location_lat, lng: location_lng, locationName: location_name ?? undefined };
+        } else if (media_type === 'interactive' && interactive_buttons) {
+          mediaArg = { type: 'interactive', buttons: interactive_buttons };
+        } else if (media_url) {
+          mediaArg = { type: media_type as string, url: media_url as string, mime: media_mime ?? undefined, name: media_name ?? undefined };
+        }
         sendChannelMessage(convRows[0].channel, Number(conversation_id), content, mediaArg, newMsg[0].id);
       }
     }

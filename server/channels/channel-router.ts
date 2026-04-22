@@ -22,7 +22,7 @@ export async function sendChannelMessage(
   channel: string,
   conversationId: number,
   text: string,
-  media?: { type: string; url: string; mime?: string; name?: string },
+  media?: { type: string; url?: string; mime?: string; name?: string; lat?: number; lng?: number; locationName?: string; buttons?: { id: string; title: string }[] },
   existingMessageId?: number, // if already persisted by caller, skip DB insert in adapter
 ): Promise<void> {
   if (process.env.ENABLE_CHANNELS !== 'true') {

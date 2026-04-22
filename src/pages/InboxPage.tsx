@@ -25,6 +25,9 @@ import {
   Paperclip,
   MoreVertical,
   Trash2,
+  Mic,
+  MousePointerClick,
+  Navigation,
 } from 'lucide-react';
 import { cn, formatRelativeTime, getChannelColor, getChannelLabel, getStageLabel, getStageColor } from '../lib/utils';
 import { api } from '../lib/api';
@@ -566,6 +569,20 @@ function MediaContent({
         </a>
       );
 
+    case 'interactive':
+      // Interactive button messages — show body text + button labels as chips
+      return (
+        <div>
+          <p className="whitespace-pre-wrap mb-2">{message.content}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {/* buttons stored as media_name JSON or shown via content parsing */}
+            <span className="text-[10px] text-slate-400 italic flex items-center gap-1">
+              <MousePointerClick className="w-3 h-3" /> Mensaje con botones interactivos
+            </span>
+          </div>
+        </div>
+      );
+
     default:
       return <p className="whitespace-pre-wrap">{message.content}</p>;
   }
@@ -641,6 +658,11 @@ function ConversationThread({
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [locationInput, setLocationInput] = useState('');
+  const [showButtonsModal, setShowButtonsModal] = useState(false);
+  const [buttonText, setButtonText] = useState('');
+  const [buttonOptions, setButtonOptions] = useState(['', '', '']);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { data: conversation } = useApi(
     () => api.getConversation(conversationId),
@@ -743,6 +765,71 @@ function ConversationThread({
       toast.error('Error al enviar el archivo. Intenta de nuevo.');
     } finally {
       setUploadingMedia(false);
+    }
+  }
+
+  async function handleSendLocation() {
+    const raw = locationInput.trim();
+    if (!raw || !conversationId) return;
+    // Accept "lat,lng" or a Google Maps URL containing @lat,lng
+    let lat: number | null = null;
+    let lng: number | null = null;
+    let locName = '';
+    const coordMatch = raw.match(/(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/);
+    if (coordMatch) {
+      lat = parseFloat(coordMatch[1]);
+      lng = parseFloat(coordMatch[2]);
+    }
+    if (lat == null || lng == null) {
+      toast.error('Formato inválido. Usa "latitud, longitud" o pega un link de Google Maps.');
+      return;
+    }
+    locName = raw.includes('maps') ? raw : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    setShowLocationModal(false);
+    setLocationInput('');
+    try {
+      const sent = await api.sendMediaMessage({
+        conversation_id: conversationId,
+        content: `[ubicación: ${locName}]`,
+        media_type: 'location',
+        location_lat: lat,
+        location_lng: lng,
+        location_name: locName,
+        sender: 'agent',
+      });
+      setMessages(prev => {
+        if (!prev) return [sent];
+        if (prev.some(m => m.id === sent.id)) return prev;
+        return [...prev, sent];
+      });
+    } catch {
+      toast.error('Error al enviar ubicación.');
+    }
+  }
+
+  async function handleSendButtons() {
+    const body = buttonText.trim();
+    const validButtons = buttonOptions.map(b => b.trim()).filter(Boolean).slice(0, 3);
+    if (!body || validButtons.length === 0 || !conversationId) return;
+    setShowButtonsModal(false);
+    setButtonText('');
+    setButtonOptions(['', '', '']);
+    try {
+      const buttons = validButtons.map((title, i) => ({ id: `btn_${i}`, title }));
+      const sent = await api.sendMediaMessage({
+        conversation_id: conversationId,
+        content: body,
+        media_type: 'interactive',
+        interactive_buttons: buttons,
+        sender: 'agent',
+      });
+      setMessages(prev => {
+        if (!prev) return [sent];
+        if (prev.some(m => m.id === sent.id)) return prev;
+        return [...prev, sent];
+      });
+    } catch {
+      toast.error('Error al enviar mensaje con botones.');
     }
   }
 
@@ -1046,20 +1133,20 @@ function ConversationThread({
             </div>
           </div>
 
-          {/* Hidden file input for media uploads */}
+          {/* Hidden file input for media uploads — includes audio */}
           <input
             ref={fileInputRef}
             type="file"
             className="hidden"
-            accept="image/*,video/*,.pdf,.doc,.docx"
+            accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
             onChange={handleFileSelect}
           />
-          {/* Paperclip button */}
+          {/* Paperclip — images, video, audio, docs */}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploadingMedia}
-            title="Adjuntar archivo"
+            title="Adjuntar archivo (imagen, video, audio, doc)"
             className={cn(
               'p-2 rounded-lg transition-colors shrink-0',
               uploadingMedia
@@ -1068,6 +1155,24 @@ function ConversationThread({
             )}
           >
             <Paperclip className="w-5 h-5" />
+          </button>
+          {/* Location button */}
+          <button
+            type="button"
+            onClick={() => setShowLocationModal(true)}
+            title="Enviar ubicación"
+            className="p-2 rounded-lg text-slate-400 hover:text-green-500 hover:bg-green-50 transition-colors shrink-0"
+          >
+            <Navigation className="w-5 h-5" />
+          </button>
+          {/* Interactive buttons composer */}
+          <button
+            type="button"
+            onClick={() => setShowButtonsModal(true)}
+            title="Mensaje con botones"
+            className="p-2 rounded-lg text-slate-400 hover:text-purple-500 hover:bg-purple-50 transition-colors shrink-0"
+          >
+            <MousePointerClick className="w-5 h-5" />
           </button>
 
           <textarea
@@ -1087,6 +1192,66 @@ function ConversationThread({
           </button>
         </div>
       </div>
+
+      {/* Location modal */}
+      {showLocationModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowLocationModal(false)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold text-slate-800 mb-1">Enviar ubicación</h3>
+            <p className="text-xs text-slate-500 mb-4">Pega un link de Google Maps o escribe "latitud, longitud"</p>
+            <input
+              autoFocus
+              type="text"
+              value={locationInput}
+              onChange={e => setLocationInput(e.target.value)}
+              placeholder="ej: 19.4326, -99.1332"
+              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 mb-4"
+              onKeyDown={e => e.key === 'Enter' && handleSendLocation()}
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setShowLocationModal(false)} className="flex-1 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">Cancelar</button>
+              <button onClick={handleSendLocation} disabled={!locationInput.trim()} className="flex-1 py-2 rounded-xl bg-green-500 text-white text-sm font-semibold hover:bg-green-600 disabled:opacity-50">Enviar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Interactive buttons modal */}
+      {showButtonsModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowButtonsModal(false)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold text-slate-800 mb-1">Mensaje con botones</h3>
+            <p className="text-xs text-slate-500 mb-4">Hasta 3 botones de respuesta rápida para el cliente</p>
+            <textarea
+              autoFocus
+              value={buttonText}
+              onChange={e => setButtonText(e.target.value)}
+              placeholder="Texto del mensaje..."
+              rows={2}
+              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 mb-3 resize-none"
+            />
+            {buttonOptions.map((opt, i) => (
+              <input
+                key={i}
+                type="text"
+                value={opt}
+                maxLength={20}
+                onChange={e => setButtonOptions(prev => prev.map((v, j) => j === i ? e.target.value : v))}
+                placeholder={`Botón ${i + 1}${i === 0 ? ' (requerido)' : ' (opcional)'}`}
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 mb-2"
+              />
+            ))}
+            <div className="flex gap-2 mt-2">
+              <button onClick={() => setShowButtonsModal(false)} className="flex-1 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">Cancelar</button>
+              <button
+                onClick={handleSendButtons}
+                disabled={!buttonText.trim() || !buttonOptions[0].trim()}
+                className="flex-1 py-2 rounded-xl bg-purple-500 text-white text-sm font-semibold hover:bg-purple-600 disabled:opacity-50"
+              >Enviar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Lightbox overlay for images */}
       {lightboxUrl && (
