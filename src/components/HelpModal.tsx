@@ -271,7 +271,7 @@ export default function HelpModal({ onClose }: HelpModalProps) {
         {/* Footer */}
         <div className="px-6 py-3 border-t border-slate-100 text-center shrink-0">
           <p className="text-[11px] text-slate-400">
-            ClienteLoop · Powered by Claude Sonnet · <span className="text-purple-500 font-medium">Haz clic en cualquier ejemplo para copiarlo</span>
+            ClienteLoop · Powered by Google Gemini · <span className="text-purple-500 font-medium">Haz clic en cualquier ejemplo para copiarlo</span>
           </p>
         </div>
       </div>

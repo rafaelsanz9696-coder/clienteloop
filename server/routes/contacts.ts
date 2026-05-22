@@ -62,6 +62,30 @@ router.post('/', async (req: AuthenticatedRequest, res) => {
 
     const cleanPhone = phone ? phone.replace(/\D/g, '') : null;
 
+    if (cleanPhone) {
+      const { rows: existing } = await db.query(
+        'SELECT * FROM contacts WHERE business_id = $1 AND phone = $2',
+        [business_id, cleanPhone]
+      );
+      if (existing.length > 0) {
+        const existingContact = existing[0];
+        // Graceful update/merge instead of collision crash
+        const { rows: updatedRows } = await db.query(`
+          UPDATE contacts
+          SET name = COALESCE($1, name),
+              email = COALESCE($2, email),
+              channel = COALESCE($3, channel),
+              pipeline_stage = COALESCE($4, pipeline_stage),
+              notes = CASE WHEN $5 <> '' THEN $5 ELSE notes END,
+              last_contact_at = CURRENT_TIMESTAMP
+          WHERE id = $6 RETURNING *
+        `, [name, email || null, channel, pipeline_stage, notes, existingContact.id]);
+
+        logActivity(business_id, existingContact.id, 'contact_updated', `Contacto ${name} fusionado por duplicación de teléfono`);
+        return res.status(201).json(updatedRows[0]);
+      }
+    }
+
     const { rows } = await db.query(`
       INSERT INTO contacts (business_id, name, phone, email, channel, pipeline_stage, notes)
       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *

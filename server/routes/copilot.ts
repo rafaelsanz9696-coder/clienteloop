@@ -1,30 +1,17 @@
 /**
- * copilot.ts — AI Copilot Flotante
- *
- * Agentic endpoint using Anthropic tool use. Claude can call up to 7 tools
- * that query/mutate the business's real data. The tool loop runs server-side
- * in a single HTTP request (max 5 iterations).
- *
- * POST /api/ai/copilot
- *   body:    { messages: [{role, content}] }
- *   returns: { reply, toolsUsed, pendingAction? }
+ * copilot.ts — AI Copilot Flotante using Google Gemini
  */
 
 import { Router } from 'express';
-import Anthropic from '@anthropic-ai/sdk';
 import db from '../db/database.js';
 import { storeMemory } from '../lib/agent-memory.js';
+import { geminiRequest, geminiStream } from '../lib/gemini.js';
 
 const router = Router();
 
-function getClient(): Anthropic {
-  if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY not set');
-  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-}
+// ─── Tool definitions for Gemini ─────────────────────────────────────────────
 
-// ─── Tool definitions for Claude ─────────────────────────────────────────────
-
-const COPILOT_TOOLS: Anthropic.Tool[] = [
+const COPILOT_TOOLS = [
   {
     name: 'get_stats',
     description: 'Obtiene estadísticas actuales del negocio: total de contactos, conversaciones abiertas, deals por etapa, valor del pipeline, tareas pendientes.',
@@ -228,7 +215,6 @@ async function executeTool(
   toolName: string,
   toolInput: Record<string, any>,
   businessId: number,
-  anthropic: Anthropic,
 ): Promise<{ result: any; pendingAction?: any }> {
   switch (toolName) {
     case 'get_stats': {
@@ -298,50 +284,49 @@ async function executeTool(
       const { rows } = await db.query(
         `SELECT stage,
                 COUNT(*) as count,
-                COALESCE(SUM(value), 0) as total_value
+                SUM(value) as total_value
          FROM pipeline_deals
          WHERE business_id = $1
-         GROUP BY stage
-         ORDER BY CASE stage
-           WHEN 'new' THEN 1
-           WHEN 'contacted' THEN 2
-           WHEN 'in_progress' THEN 3
-           WHEN 'closed' THEN 4
-           WHEN 'lost' THEN 5
-           ELSE 6 END`,
-        [businessId],
+         GROUP BY stage`,
+        [businessId]
       );
-      const totalValue = rows.reduce((sum: number, r: any) => sum + Number(r.total_value), 0);
-      return { result: { stages: rows, total_pipeline_value: totalValue } };
+      return { result: { summary: rows } };
     }
 
     case 'search_conversations': {
-      const { query, limit = 5 } = toolInput;
+      const { query: searchVal, limit = 5 } = toolInput;
       const { rows } = await db.query(
-        `SELECT DISTINCT cv.id as conversation_id, ct.name as contact_name,
-                ct.channel, m.content as matching_message, m.created_at
+        `SELECT m.id, m.content, m.sender, m.created_at, c.id as conversation_id, ct.name as contact_name
          FROM messages m
-         JOIN conversations cv ON cv.id = m.conversation_id
-         JOIN contacts ct ON ct.id = cv.contact_id
-         WHERE cv.business_id = $1 AND m.content ILIKE $2
-         ORDER BY m.created_at DESC
-         LIMIT $3`,
-        [businessId, `%${query}%`, Math.min(limit, 10)],
+         JOIN conversations c ON c.id = m.conversation_id
+         JOIN contacts ct ON ct.id = c.contact_id
+         WHERE c.business_id = $1 AND m.content ILIKE $2
+         ORDER BY m.created_at DESC LIMIT $3`,
+        [businessId, `%${searchVal}%`, Math.min(limit, 10)]
       );
-      return { result: { conversations: rows, count: rows.length } };
+      return { result: { matches: rows, count: rows.length } };
     }
 
     case 'create_task': {
-      // Does NOT insert — returns pending action for frontend confirmation
       const { title, contact_name, due_time } = toolInput;
+      let contactId: number | null = null;
+
+      if (contact_name) {
+        const { rows } = await db.query(
+          'SELECT id FROM contacts WHERE business_id = $1 AND name ILIKE $2 LIMIT 1',
+          [businessId, `%${contact_name}%`]
+        );
+        if (rows[0]) contactId = rows[0].id;
+      }
+
       return {
         result: {
           status: 'pending_confirmation',
-          message: 'Tarea lista para crear. El usuario debe confirmar antes de guardar.',
+          message: `Tarea "${title}" lista para crear. Pendiente de confirmación.`,
         },
         pendingAction: {
           action: 'create_task',
-          data: { title, contact_name, due_time: due_time || null },
+          data: { title, contact_id: contactId, due_time: due_time || null },
           requiresConfirm: true,
         },
       };
@@ -349,36 +334,28 @@ async function executeTool(
 
     case 'move_contact_stage': {
       const { contact_name, contact_id, new_stage } = toolInput;
-      let id = contact_id;
-      let resolvedName = contact_name ?? '';
+      let cId = contact_id;
 
-      if (!id && contact_name) {
+      if (!cId && contact_name) {
         const { rows } = await db.query(
-          'SELECT id, name FROM contacts WHERE business_id = $1 AND name ILIKE $2 LIMIT 1',
-          [businessId, `%${contact_name}%`],
-        ) as { rows: Array<{ id: number; name: string }> };
-        if (rows.length === 0) {
-          return { result: { error: `No se encontró un contacto con el nombre "${contact_name}"` } };
-        }
-        id = rows[0].id;
-        resolvedName = rows[0].name;
+          'SELECT id FROM contacts WHERE business_id = $1 AND name ILIKE $2 LIMIT 1',
+          [businessId, `%${contact_name}%`]
+        );
+        cId = rows[0]?.id;
       }
 
-      if (!id) return { result: { error: 'Se requiere contact_name o contact_id' } };
-
-      const STAGE_LABELS: Record<string, string> = {
-        new: 'Nuevo', contacted: 'Contactado', in_progress: 'En proceso',
-        closed: 'Cerrado', lost: 'Perdido',
-      };
+      if (!cId) {
+        return { result: { error: `No se pudo encontrar un contacto con el nombre "${contact_name}"` } };
+      }
 
       return {
         result: {
           status: 'pending_confirmation',
-          message: `Mover a ${resolvedName} a "${STAGE_LABELS[new_stage] ?? new_stage}". Pendiente de confirmación.`,
+          message: `Contacto con ID ${cId} listo para mover a "${new_stage}". Pendiente de confirmación.`,
         },
         pendingAction: {
           action: 'move_contact_stage',
-          data: { contact_id: id, title: resolvedName, new_stage },
+          data: { contact_id: cId, stage: new_stage },
           requiresConfirm: true,
         },
       };
@@ -389,7 +366,7 @@ async function executeTool(
       return {
         result: {
           status: 'pending_confirmation',
-          message: `Respuesta rápida "${title}" lista para crear. Pendiente de confirmación del usuario.`,
+          message: `Plantilla de respuesta rápida "${title}" lista para crear. Pendiente de confirmación.`,
         },
         pendingAction: {
           action: 'create_quick_reply',
@@ -473,14 +450,14 @@ async function executeTool(
       const silenceLabel = hoursSilent >= 24
         ? `${Math.floor(hoursSilent / 24)} día(s)` : `${Math.floor(hoursSilent)} hora(s)`;
 
-      const followupResp = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 200,
+      const followupResp = await geminiRequest({
+        model: 'gemini-3.5-flash',
         temperature: 0.7,
-        system: `Genera UN mensaje de seguimiento para ${conv.name} de "${biz.name}" (${biz.nicho || 'general'}). Lleva ${silenceLabel} sin responder.${context_hint ? ` Contexto extra: ${context_hint}` : ''} Solo el mensaje, 2-3 líneas, cálido.${biz.ai_context ? `\n${biz.ai_context}` : ''}`,
+        maxTokens: 200,
+        systemPrompt: `Genera UN mensaje de seguimiento para ${conv.name} de "${biz.name}" (${biz.nicho || 'general'}). Lleva ${silenceLabel} sin responder.${context_hint ? ` Contexto extra: ${context_hint}` : ''} Solo el mensaje, 2-3 líneas, cálido.${biz.ai_context ? `\n${biz.ai_context}` : ''}`,
         messages: [{ role: 'user', content: transcript ? `Historial:\n${transcript}` : '(Sin historial previo)' }],
       });
-      const msgText = (followupResp.content.find((c: any) => c.type === 'text') as any)?.text?.trim() || '';
+      const msgText = followupResp.text?.trim() || '';
 
       return {
         result: {
@@ -577,75 +554,81 @@ router.post('/', async (req, res) => {
     const biz = bizRows[0] || { name: 'tu negocio', nicho: 'general', ai_context: '' };
     const systemPrompt = buildSystemPrompt(biz);
 
-    const anthropic = getClient();
-    let loopMessages: Anthropic.MessageParam[] = messages as Anthropic.MessageParam[];
+    let loopMessages: any[] = [...messages];
     const toolsUsed: string[] = [];
     let pendingAction: any = null;
     let finalReply = '';
 
-    // ── Agentic loop (max 5 tool call iterations) ──────────────────────────
+    // Agentic loop (max 5 tool call iterations)
     for (let i = 0; i < 5; i++) {
-      const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1500,
-        system: systemPrompt,
-        tools: COPILOT_TOOLS,
+      const response = await geminiRequest({
+        model: 'gemini-3.5-flash',
+        systemPrompt,
         messages: loopMessages,
+        tools: COPILOT_TOOLS,
       });
 
-      if (response.stop_reason === 'end_turn') {
-        const textBlock = response.content.find((c) => c.type === 'text');
-        finalReply = textBlock ? (textBlock as any).text : '';
+      if (!response.toolCalls) {
+        finalReply = response.text || '';
         break;
       }
 
-      if (response.stop_reason === 'tool_use') {
-        // Build tool results
-        const toolResultContents: Anthropic.ToolResultBlockParam[] = [];
+      // We have tool calls! Run them
+      const toolResultContents: any[] = [];
+      const toolCallContent: any[] = [];
 
-        for (const block of response.content) {
-          if (block.type !== 'tool_use') continue;
+      for (const tc of response.toolCalls) {
+        toolsUsed.push(tc.name);
+        console.log(`[Copilot Gemini] Tool call: ${tc.name}`, tc.args);
 
-          toolsUsed.push(block.name);
-          console.log(`[Copilot] Tool call: ${block.name}`, block.input);
+        try {
+          const { result, pendingAction: pa } = await executeTool(
+            tc.name,
+            tc.args,
+            businessId,
+          );
 
-          try {
-            const { result, pendingAction: pa } = await executeTool(
-              block.name,
-              block.input as Record<string, any>,
-              businessId,
-              anthropic,
-            );
+          if (pa) pendingAction = pa;
 
-            if (pa) pendingAction = pa;
+          toolCallContent.push({
+            type: 'tool_use',
+            id: tc.id,
+            name: tc.name,
+            input: tc.args,
+            thoughtSignature: tc.thoughtSignature,
+          });
 
-            toolResultContents.push({
-              type: 'tool_result',
-              tool_use_id: block.id,
-              content: JSON.stringify(result),
-            });
-          } catch (err: any) {
-            console.error(`[Copilot] Tool error (${block.name}):`, err);
-            toolResultContents.push({
-              type: 'tool_result',
-              tool_use_id: block.id,
-              is_error: true,
-              content: `Error al ejecutar ${block.name}: ${err.message}`,
-            });
-          }
+          toolResultContents.push({
+            type: 'tool_result',
+            tool_use_id: tc.id,
+            name: tc.name,
+            content: result,
+          });
+        } catch (err: any) {
+          console.error(`[Copilot Gemini] Tool error (${tc.name}):`, err);
+          toolCallContent.push({
+            type: 'tool_use',
+            id: tc.id,
+            name: tc.name,
+            input: tc.args,
+          });
+
+          toolResultContents.push({
+            type: 'tool_result',
+            tool_use_id: tc.id,
+            name: tc.name,
+            is_error: true,
+            content: `Error al ejecutar ${tc.name}: ${err.message}`,
+          });
         }
-
-        // Append assistant + tool results and loop
-        loopMessages = [
-          ...loopMessages,
-          { role: 'assistant', content: response.content },
-          { role: 'user', content: toolResultContents },
-        ];
-        continue;
       }
 
-      // Unexpected stop reason — break
-      break;
+      // Append tool calls & results and loop
+      loopMessages = [
+        ...loopMessages,
+        { role: 'assistant', content: toolCallContent },
+        { role: 'user', content: toolResultContents },
+      ];
     }
 
     if (!finalReply) {
@@ -654,19 +637,12 @@ router.post('/', async (req, res) => {
 
     res.json({ reply: finalReply, toolsUsed, pendingAction });
   } catch (err: any) {
-    console.error('[Copilot]', err);
+    console.error('[Copilot Gemini]', err);
     res.status(500).json({ error: err.message || 'Error in copilot' });
   }
 });
 
 // ─── Streaming route (SSE) ────────────────────────────────────────────────────
-// POST /api/ai/copilot/stream
-// Same agentic loop but streams text tokens to the client via Server-Sent Events.
-// SSE events:
-//   { type: 'tool_start', name: string }   — a tool call is executing
-//   { type: 'delta', text: string }         — text token from Claude
-//   { type: 'done', toolsUsed, pendingAction, reply } — stream complete
-//   { type: 'error', message: string }      — something went wrong
 
 router.post('/stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -703,120 +679,94 @@ router.post('/stream', async (req, res) => {
     const biz = bizRows[0] || { name: 'tu negocio', nicho: 'general', ai_context: '' };
     const systemPrompt = buildSystemPrompt(biz);
 
-    const anthropic = getClient();
-    let loopMessages: Anthropic.MessageParam[] = messages as Anthropic.MessageParam[];
+    let loopMessages: any[] = [...messages];
     const toolsUsed: string[] = [];
     let pendingAction: any = null;
     let accumulatedReply = '';
 
     for (let i = 0; i < 5; i++) {
-      const stream = anthropic.messages.stream({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1500,
-        system: systemPrompt,
-        tools: COPILOT_TOOLS,
+      let currentToolCalls: any[] = [];
+      accumulatedReply = ''; // Reset reply text for this turn
+
+      await geminiStream({
+        model: 'gemini-3.5-flash',
+        systemPrompt,
         messages: loopMessages,
+        tools: COPILOT_TOOLS,
+        onChunk: (text) => {
+          accumulatedReply += text;
+          send({ type: 'delta', text });
+        },
+        onToolCall: (name, args, id, thoughtSignature) => {
+          currentToolCalls.push({ name, args, id, thoughtSignature });
+          send({ type: 'tool_start', name });
+        },
       });
 
-      // Track content blocks by their position index in the streamed message
-      const blocksByIndex: Record<number, {
-        type: string; id?: string; name?: string;
-        text?: string; inputJson?: string; input?: any;
-      }> = {};
-      let stopReason = '';
-
-      // Iterate over raw SSE events from Anthropic
-      for await (const event of stream) {
-        if (event.type === 'content_block_start') {
-          const cb = event.content_block;
-          if (cb.type === 'tool_use') {
-            blocksByIndex[event.index] = { type: 'tool_use', id: cb.id, name: cb.name, inputJson: '' };
-            send({ type: 'tool_start', name: cb.name }); // → frontend shows "Consultando X..."
-          } else if (cb.type === 'text') {
-            blocksByIndex[event.index] = { type: 'text', text: '' };
-          }
-        }
-
-        if (event.type === 'content_block_delta') {
-          const block = blocksByIndex[event.index];
-          if (!block) continue;
-          if (event.delta.type === 'text_delta') {
-            block.text = (block.text ?? '') + event.delta.text;
-            accumulatedReply += event.delta.text;
-            send({ type: 'delta', text: event.delta.text }); // → frontend streams words
-          }
-          if (event.delta.type === 'input_json_delta' && block.type === 'tool_use') {
-            block.inputJson = (block.inputJson ?? '') + event.delta.partial_json;
-          }
-        }
-
-        if (event.type === 'content_block_stop') {
-          const block = blocksByIndex[event.index];
-          if (block?.type === 'tool_use') {
-            try { block.input = JSON.parse(block.inputJson || '{}'); }
-            catch { block.input = {}; }
-          }
-        }
-
-        if (event.type === 'message_delta') {
-          stopReason = event.delta.stop_reason ?? '';
-        }
-      }
-
-      if (stopReason === 'end_turn') {
+      if (currentToolCalls.length === 0) {
+        // No tool calls — model is done!
         send({ type: 'done', toolsUsed, pendingAction, reply: accumulatedReply });
         break;
       }
 
-      if (stopReason === 'tool_use') {
-        accumulatedReply = ''; // Reset text for next iteration
-        const toolResultContents: Anthropic.ToolResultBlockParam[] = [];
+      // We have tool calls to execute
+      const toolResultContents: any[] = [];
+      const toolCallContent: any[] = [];
 
-        for (const block of Object.values(blocksByIndex)) {
-          if (block.type !== 'tool_use' || !block.id || !block.name) continue;
-          toolsUsed.push(block.name);
-          console.log(`[Copilot/stream] Tool: ${block.name}`);
+      for (const tc of currentToolCalls) {
+        toolsUsed.push(tc.name);
+        console.log(`[Copilot Gemini/stream] Executing Tool: ${tc.name}`);
 
-          try {
-            const { result, pendingAction: pa } = await executeTool(
-              block.name, block.input ?? {}, businessId, anthropic,
-            );
-            if (pa) pendingAction = pa;
-            toolResultContents.push({
-              type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result),
-            });
-          } catch (err: any) {
-            console.error(`[Copilot/stream] Tool error (${block.name}):`, err);
-            toolResultContents.push({
-              type: 'tool_result', tool_use_id: block.id, is_error: true, content: err.message,
-            });
-          }
+        try {
+          const { result, pendingAction: pa } = await executeTool(
+            tc.name, tc.args, businessId
+          );
+          if (pa) pendingAction = pa;
+
+          toolCallContent.push({
+            type: 'tool_use',
+            id: tc.id,
+            name: tc.name,
+            input: tc.args,
+            thoughtSignature: tc.thoughtSignature,
+          });
+
+          toolResultContents.push({
+            type: 'tool_result',
+            tool_use_id: tc.id,
+            name: tc.name,
+            content: result,
+          });
+        } catch (err: any) {
+          console.error(`[Copilot Gemini/stream] Tool error (${tc.name}):`, err);
+          toolCallContent.push({
+            type: 'tool_use',
+            id: tc.id,
+            name: tc.name,
+            input: tc.args,
+          });
+
+          toolResultContents.push({
+            type: 'tool_result',
+            tool_use_id: tc.id,
+            name: tc.name,
+            is_error: true,
+            content: err.message,
+          });
         }
-
-        // Reconstruct assistant message in Anthropic format for next loop iteration
-        const assistantContent: Array<Anthropic.TextBlock | Anthropic.ToolUseBlock> = Object.values(blocksByIndex)
-          .map((block) => {
-            if (block.type === 'text') {
-              return { type: 'text', text: block.text ?? '' } as Anthropic.TextBlock;
-            }
-            if (block.type === 'tool_use') {
-              return { type: 'tool_use', id: block.id!, name: block.name!, input: block.input ?? {} } as Anthropic.ToolUseBlock;
-            }
-            return null;
-          })
-          .filter((b): b is Anthropic.TextBlock | Anthropic.ToolUseBlock => b !== null);
-
-        loopMessages = [
-          ...loopMessages,
-          { role: 'assistant', content: assistantContent },
-          { role: 'user', content: toolResultContents },
-        ];
       }
+
+      // Append tool uses and results and repeat the agentic loop
+      loopMessages = [
+        ...loopMessages,
+        { role: 'assistant', content: toolCallContent },
+        { role: 'user', content: toolResultContents },
+      ];
     }
 
     res.end();
   } catch (err: any) {
-    console.error('[Copilot/stream]', err);
+    console.error('[Copilot Gemini/stream]', err);
     send({ type: 'error', message: err.message || 'Stream error' });
     res.end();
   }

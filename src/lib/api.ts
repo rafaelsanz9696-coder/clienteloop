@@ -223,6 +223,8 @@ export const api = {
     if (category) qs.set('category', category);
     return request<QuickReply[]>(`/quick-replies?${qs}`);
   },
+  loadQuickReplyPresets: () =>
+    request<QuickReply[]>('/quick-replies/presets', { method: 'POST' }),
   createQuickReply: (data: Partial<QuickReply>) =>
     request<QuickReply>('/quick-replies', { method: 'POST', body: JSON.stringify({ business_id: _activeBusinessId, ...data }) }),
   updateQuickReply: (id: number, data: Partial<QuickReply>) =>

@@ -1,10 +1,9 @@
 import { Router } from 'express';
-import Anthropic from '@anthropic-ai/sdk';
 import db from '../db/database.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
+import { geminiRequest } from '../lib/gemini.js';
 
 const router = Router();
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // GET /api/ai/insights — generate real-time insights from conversations and patterns
 // Route is '/' because this router is mounted at '/api/ai/insights' in index.ts
@@ -85,15 +84,25 @@ ${memories.length === 0 ? 'Sin memorias' :
 
 Genera insights útiles basados en estos datos.`;
 
-        const message = await anthropic.messages.create({
-            model: 'claude-3-5-haiku-20241022', // faster/cheaper for insights
-            max_tokens: 800,
+        if (!process.env.GEMINI_API_KEY) {
+            return res.json({
+                insights: [],
+                summary: 'El motor de análisis de IA no está configurado (falta GEMINI_API_KEY).',
+                error: true
+            });
+        }
+
+        const response = await geminiRequest({
+            model: 'gemini-3.5-flash',
+            maxTokens: 800,
             messages: [{ role: 'user', content: userMessage }],
-            system: systemPrompt,
+            systemPrompt: systemPrompt,
+            temperature: 0.2
         });
 
-        const content = (message.content[0] as any).text;
-        const parsed = JSON.parse(content);
+        const content = response.text || '';
+        const cleanContent = content.replace(/```json\s?/i, '').replace(/```\s*$/, '').trim();
+        const parsed = JSON.parse(cleanContent);
         res.json(parsed);
     } catch (err: any) {
         console.error('[AI Insights]', err);

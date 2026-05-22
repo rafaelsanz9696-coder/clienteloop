@@ -1,17 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { geminiRequest } from './gemini.js';
 import { NICHO_PROMPTS, NICHO_CONFIGS, GLOBAL_GUARDRAILS, type Nicho } from './nicho-prompts.js';
-
-let client: Anthropic | null = null;
-
-function getClient(): Anthropic {
-  if (!client) {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      throw new Error('ANTHROPIC_API_KEY not set');
-    }
-    client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  }
-  return client;
-}
 
 export interface NichoAIResponse {
   response: string | null;
@@ -29,8 +17,6 @@ export interface ExtractedTask {
 export async function extractTaskFromConversation(params: {
   conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>;
 }): Promise<ExtractedTask | null> {
-  const anthropic = getClient();
-
   const systemPrompt = `Eres un asistente experto en CRM. Tu tarea es extraer UNA SOLA tarea accionable de la conversación proporcionada.
   Si no hay una tarea clara (como agendar una cita, llamar luego, enviar info), responde con NULL.
   Si hay una tarea, responde ÚNICAMENTE en formato JSON:
@@ -42,23 +28,26 @@ export async function extractTaskFromConversation(params: {
   
   ${GLOBAL_GUARDRAILS}`;
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 300,
-    temperature: 0,
-    system: systemPrompt,
-    messages: [
-      ...params.conversationHistory,
-      { role: 'user', content: 'Extrae la siguiente tarea de esta conversación.' },
-    ],
-  });
-
-  const textContent = response.content.find((c) => c.type === 'text')?.text;
-  if (!textContent || textContent.includes('NULL')) return null;
-
   try {
-    return JSON.parse(textContent);
-  } catch {
+    const response = await geminiRequest({
+      model: 'gemini-3.5-flash',
+      systemPrompt,
+      messages: [
+        ...params.conversationHistory,
+        { role: 'user', content: 'Extrae la siguiente tarea de esta conversación.' },
+      ],
+      temperature: 0,
+      maxTokens: 300,
+    });
+
+    const textContent = response.text;
+    if (!textContent || textContent.includes('NULL')) return null;
+
+    // Strip markdown JSON wrappers if any
+    const jsonStr = textContent.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+    return JSON.parse(jsonStr);
+  } catch (err) {
+    console.error('[Nicho Engine] extractTaskError:', err);
     return null;
   }
 }
@@ -130,25 +119,26 @@ REGLA CRÍTICA DE CITAS: Si el cliente pide una cita o pregunta por disponibilid
 
   systemPrompt += `\n\n${GLOBAL_GUARDRAILS}`;
 
-  const anthropic = getClient();
+  try {
+    const response = await geminiRequest({
+      model: 'gemini-3.5-flash',
+      systemPrompt,
+      messages: [
+        ...params.conversationHistory,
+        { role: 'user', content: params.newMessage },
+      ],
+      temperature: config.temperature,
+      maxTokens: config.maxTokens,
+    });
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: config.maxTokens,
-    temperature: config.temperature,
-    system: systemPrompt,
-    messages: [
-      ...params.conversationHistory,
-      { role: 'user', content: params.newMessage },
-    ],
-  });
-
-  const textContent = response.content.find((c) => c.type === 'text');
-
-  return {
-    response: textContent ? textContent.text : '',
-    escalate: false,
-    inputTokens: response.usage.input_tokens,
-    outputTokens: response.usage.output_tokens,
-  };
+    return {
+      response: response.text || '',
+      escalate: false,
+      inputTokens: response.usage?.input_tokens || 0,
+      outputTokens: response.usage?.output_tokens || 0,
+    };
+  } catch (err: any) {
+    console.error('[Nicho Engine] respondError:', err);
+    return { response: null, escalate: true };
+  }
 }

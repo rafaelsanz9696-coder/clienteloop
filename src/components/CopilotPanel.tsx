@@ -588,7 +588,7 @@ export default function CopilotPanel() {
             </button>
           </div>
           <p className="text-[10px] text-slate-400 text-center mt-1.5">
-            Powered by Claude · Datos reales de tu negocio
+            Powered by Google Gemini · Datos reales de tu negocio
           </p>
         </div>
       </div>

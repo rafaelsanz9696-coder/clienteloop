@@ -223,6 +223,29 @@ function ContactDetail({ contactId, onClose, onUpdated }: { contactId: number; o
   const { data: contact, loading, refetch: refetchContact } = useApi(() => api.getContact(contactId), [contactId]);
   const [activeTab, setActiveTab] = useState<DetailTab>('info');
   const navigate = useNavigate();
+  const [navigatingInbox, setNavigatingInbox] = useState(false);
+
+  async function handleGoToInbox() {
+    if (navigatingInbox) return;
+    setNavigatingInbox(true);
+    try {
+      const convs = await api.getContactConversations(contactId);
+      if (convs && convs.length > 0) {
+        navigate(`/app/inbox/${convs[0].id}`);
+      } else {
+        const newConv = await api.createConversation({
+          contact_id: contactId,
+          channel: contact?.channel || 'whatsapp'
+        });
+        navigate(`/app/inbox/${newConv.id}`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Error al abrir el chat: ' + (err.message || 'Inténtalo de nuevo'));
+    } finally {
+      setNavigatingInbox(false);
+    }
+  }
 
   const [notes, setNotes]                   = useState<ContactNote[]>([]);
   const [deals, setDeals]                   = useState<PipelineDeal[]>([]);
@@ -295,7 +318,7 @@ function ContactDetail({ contactId, onClose, onUpdated }: { contactId: number; o
               {getChannelLabel(contact.channel)}
             </span>
           </div>
-          <button onClick={() => navigate('/app/inbox')} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Ver en Inbox">
+          <button onClick={handleGoToInbox} disabled={navigatingInbox} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50" title="Ver en Inbox">
             <Send className="w-4 h-4" />
           </button>
         </div>

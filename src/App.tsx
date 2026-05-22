@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet, useParams } from 'react-router-dom';
 import { WifiOff, RefreshCw } from 'lucide-react';
 import AppLayout from './components/layout/AppLayout';
 import LoginPage from './pages/LoginPage';
@@ -61,6 +61,11 @@ function AuthenticatedApp() {
 
   // User has at least one business → render the normal dashboard routes
   return <Outlet />;
+}
+
+function RedirectToAppInbox() {
+  const { id } = useParams();
+  return <Navigate to={`/app/inbox/${id}`} replace />;
 }
 
 export default function App() {
@@ -141,7 +146,7 @@ export default function App() {
 
       {/* Shorthand redirects */}
       <Route path="/inbox" element={<Navigate to="/app/inbox" replace />} />
-      <Route path="/inbox/:id" element={<Navigate to="/app/inbox" replace />} />
+      <Route path="/inbox/:id" element={<RedirectToAppInbox />} />
       <Route path="/dashboard" element={<Navigate to="/app" replace />} />
       <Route path="/contacts" element={<Navigate to="/app/contacts" replace />} />
       <Route path="/pipeline" element={<Navigate to="/app/pipeline" replace />} />

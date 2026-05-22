@@ -1,25 +1,13 @@
 /**
- * setupAssistant.ts — Agentic Onboarding Assistant
- *
- * Two endpoints:
- *  POST /chat     — Conversational turn with the setup AI consultant
- *  POST /finalize — Executes 3 agentic actions from the full conversation:
- *                   1. Save extracted facts as business_memories
- *                   2. Generate and save 5 custom quick replies
- *                   3. Update businesses.ai_context with structured summary
+ * setupAssistant.ts — Agentic Onboarding Assistant using Google Gemini
  */
 
 import { Router } from 'express';
-import Anthropic from '@anthropic-ai/sdk';
 import db from '../db/database.js';
 import { storeMemory } from '../lib/agent-memory.js';
+import { geminiRequest } from '../lib/gemini.js';
 
 const router = Router();
-
-function getClient(): Anthropic {
-  if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY not set');
-  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-}
 
 // ─── POST /chat ───────────────────────────────────────────────────────────────
 // Handles one conversation turn with the setup consultant AI.
@@ -34,7 +22,6 @@ router.post('/chat', async (req, res) => {
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'messages array required' });
     }
-    // Empty array is valid — means the assistant should send the opening greeting
 
     // Load business info for personalization
     const { rows: bizRows } = await db.query(
@@ -78,21 +65,18 @@ Reglas:
 - Si el usuario dice que sí o acepta, responde ÚNICAMENTE con el texto exacto: SETUP_COMPLETE
 - No respondas nada más después de SETUP_COMPLETE.`;
 
-    // Anthropic requires at least one message — inject a trigger when empty (opening greeting)
     const messagesForApi = messages.length > 0
       ? messages
       : [{ role: 'user' as const, content: 'Hola, quiero configurar mi negocio.' }];
 
-    const anthropic = getClient();
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 400,
-      system: systemPrompt,
+    const response = await geminiRequest({
+      model: 'gemini-3.5-flash',
+      systemPrompt,
       messages: messagesForApi,
+      maxTokens: 400,
     });
 
-    const textBlock = response.content.find((c) => c.type === 'text');
-    const reply = textBlock ? textBlock.text.trim() : '';
+    const reply = response.text.trim();
     const setupComplete = reply === 'SETUP_COMPLETE';
 
     res.json({ reply, setupComplete });
@@ -103,7 +87,7 @@ Reglas:
 });
 
 // ─── POST /finalize ───────────────────────────────────────────────────────────
-// Takes the full conversation and executes 3 agentic actions in parallel.
+// Takes the full conversation and executes 3 agentic actions in parallel using Gemini.
 
 router.post('/finalize', async (req, res) => {
   try {
@@ -128,7 +112,6 @@ router.post('/finalize', async (req, res) => {
 
     const biz = bizRows[0];
     const businessId = biz.id;
-    const anthropic = getClient();
 
     // Build a plain transcript for extraction prompts
     const transcript = messages
@@ -136,12 +119,12 @@ router.post('/finalize', async (req, res) => {
       .join('\n');
 
     // ── Action 1: Extract and store memories ──────────────────────────────────
-    const memoriesExtraction = anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1000,
+    const memoriesExtraction = geminiRequest({
+      model: 'gemini-3.5-flash',
       temperature: 0,
-      system: `Analiza la siguiente entrevista de configuración de negocio y extrae datos estructurados en JSON.
-Devuelve ÚNICAMENTE JSON válido con esta estructura exacta (sin texto adicional):
+      maxTokens: 1000,
+      systemPrompt: `Analiza la siguiente entrevista de configuración de negocio y extrae datos estructurados en JSON.
+Devuelve ÚNICAMENTE JSON válido con esta estructura exacta (sin formato markdown ni texto adicional):
 {
   "faqs": ["string", ...],
   "style": "string",
@@ -155,13 +138,13 @@ Devuelve ÚNICAMENTE JSON válido con esta estructura exacta (sin texto adiciona
     });
 
     // ── Action 2: Generate quick replies ─────────────────────────────────────
-    const quickRepliesExtraction = anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1200,
+    const quickRepliesExtraction = geminiRequest({
+      model: 'gemini-3.5-flash',
       temperature: 0,
-      system: `Analiza la siguiente entrevista y genera EXACTAMENTE 5 respuestas rápidas de WhatsApp para el negocio.
+      maxTokens: 1200,
+      systemPrompt: `Analiza la siguiente entrevista y genera EXACTAMENTE 5 respuestas rápidas de WhatsApp para el negocio.
 Usa los precios, servicios y tono reales de la entrevista.
-Devuelve ÚNICAMENTE JSON válido (sin texto adicional):
+Devuelve ÚNICAMENTE JSON válido (sin formato markdown ni texto adicional):
 [
   { "title": "string (máx 40 chars)", "category": "string", "content": "string (mensaje completo listo para enviar)" },
   ...
@@ -172,11 +155,11 @@ Incluye {{nombre}} donde sea natural dirigirse al cliente.`,
     });
 
     // ── Action 3: Generate structured ai_context ──────────────────────────────
-    const contextExtraction = anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 600,
+    const contextExtraction = geminiRequest({
+      model: 'gemini-3.5-flash',
       temperature: 0,
-      system: `Analiza la siguiente entrevista y genera un "Contexto de IA" estructurado para el negocio.
+      maxTokens: 600,
+      systemPrompt: `Analiza la siguiente entrevista y genera un "Contexto de IA" estructurado para el negocio.
 Este texto será inyectado en el system prompt del asistente de WhatsApp.
 Escríbelo en tercera persona, directo y denso en información útil.
 Formato:
@@ -201,7 +184,7 @@ Máximo 250 palabras. Solo el texto, sin JSON.`,
 
     // ── Save memories ─────────────────────────────────────────────────────────
     try {
-      const memoriesText = (memoriesResult.content.find((c) => c.type === 'text') as any)?.text || '';
+      const memoriesText = memoriesResult.text || '';
       // Strip potential markdown code fences
       const jsonStr = memoriesText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
       const extracted = JSON.parse(jsonStr);
@@ -235,7 +218,7 @@ Máximo 250 palabras. Solo el texto, sin JSON.`,
 
     // ── Save quick replies ────────────────────────────────────────────────────
     try {
-      const qrText = (quickRepliesResult.content.find((c) => c.type === 'text') as any)?.text || '';
+      const qrText = quickRepliesResult.text || '';
       const jsonStr = qrText.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
       const quickReplies: Array<{ title: string; category: string; content: string }> = JSON.parse(jsonStr);
 
@@ -252,23 +235,26 @@ Máximo 250 palabras. Solo el texto, sin JSON.`,
       console.error('[SetupAssistant /finalize] Quick replies extraction error:', err);
     }
 
-    // ── Update ai_context ─────────────────────────────────────────────────────
+    // ── Save ai_context ───────────────────────────────────────────────────────
     try {
-      const contextText = (contextResult.content.find((c) => c.type === 'text') as any)?.text || '';
-      if (contextText.trim()) {
+      const newContext = contextResult.text.trim();
+      if (newContext) {
         await db.query(
           'UPDATE businesses SET ai_context = $1 WHERE id = $2',
-          [contextText.trim(), businessId],
+          [newContext, businessId]
         );
         contextUpdated = true;
       }
     } catch (err) {
-      console.error('[SetupAssistant /finalize] Context update error:', err);
+      console.error('[SetupAssistant /finalize] Context save error:', err);
     }
 
-    console.log(`[SetupAssistant] Business ${businessId} setup complete — memories: ${memoriesCreated}, qr: ${quickRepliesCreated}, context: ${contextUpdated}`);
-
-    res.json({ memoriesCreated, quickRepliesCreated, contextUpdated });
+    res.json({
+      success: true,
+      memoriesCreated,
+      quickRepliesCreated,
+      contextUpdated,
+    });
   } catch (err: any) {
     console.error('[SetupAssistant /finalize]', err);
     res.status(500).json({ error: err.message || 'Error finalizing setup' });

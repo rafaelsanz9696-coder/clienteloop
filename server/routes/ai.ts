@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import Anthropic from '@anthropic-ai/sdk';
 import db from '../db/database.js';
 import { respondWithNichoAI } from '../lib/nicho-engine.js';
+import { geminiRequest } from '../lib/gemini.js';
 
 const router = Router();
 
@@ -11,11 +11,11 @@ router.post('/suggest', async (req, res) => {
     const { conversation_id, tone } = req.body;
     if (!conversation_id) return res.status(400).json({ error: 'conversation_id required' });
 
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!process.env.GEMINI_API_KEY) {
       return res.json({
         suggestion: '',
         escalate: false,
-        error: 'ANTHROPIC_API_KEY not configured. Add it to your .env file.',
+        error: 'GEMINI_API_KEY not configured. Add it to your .env file.',
       });
     }
 
@@ -82,10 +82,10 @@ router.post('/suggest', async (req, res) => {
 
 // GET /api/ai/status
 router.get('/status', (_req, res) => {
-  const configured = !!process.env.ANTHROPIC_API_KEY;
+  const configured = !!process.env.GEMINI_API_KEY;
   res.json({
     status: configured ? 'ready' : 'not_configured',
-    model: 'claude-sonnet-4-6',
+    model: 'gemini-3.5-flash',
   });
 });
 
@@ -141,17 +141,15 @@ router.post('/analyze-chats', async (req, res) => {
       return res.status(400).json({ error: 'chatText must be at least 50 characters' });
     }
 
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!process.env.GEMINI_API_KEY) {
       return res.status(503).json({
-        error: 'ANTHROPIC_API_KEY not configured',
-        message: 'Agrega tu clave ANTHROPIC_API_KEY al archivo .env para usar esta función.',
+        error: 'GEMINI_API_KEY not configured',
+        message: 'Agrega tu clave GEMINI_API_KEY al archivo .env para usar esta función.',
       });
     }
 
     // Trim to 15,000 chars to stay well within token budget
     const trimmedChat = chatText.trim().slice(0, 15000);
-
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const analysisPrompt = `Analiza estas conversaciones reales de un negocio llamado "${businessName || 'el negocio'}" (${nicho || 'negocio general'}).
 
@@ -172,20 +170,16 @@ ${trimmedChat}
 
 Responde SOLO con el perfil formateado usando las 5 secciones indicadas. Sin explicaciones extras ni texto adicional antes o después.`;
 
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1500,
+    const message = await geminiRequest({
+      model: 'gemini-3.5-flash',
       temperature: 0.3,
       messages: [{ role: 'user', content: analysisPrompt }],
     });
 
-    const styleProfile =
-      (message.content.find((c) => c.type === 'text') as any)?.text ?? '';
-
     res.json({
-      styleProfile,
-      inputTokens: message.usage.input_tokens,
-      outputTokens: message.usage.output_tokens,
+      styleProfile: message.text || '',
+      inputTokens: message.usage?.input_tokens || 0,
+      outputTokens: message.usage?.output_tokens || 0,
     });
   } catch (err: any) {
     console.error('[Analyze Chats Error]', err);
@@ -200,8 +194,8 @@ router.post('/generate-followup', async (req, res) => {
     const { conversation_id } = req.body;
     if (!conversation_id) return res.status(400).json({ error: 'conversation_id required' });
 
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured' });
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({ error: 'GEMINI_API_KEY not configured' });
     }
 
     // Load conversation + business context
@@ -235,12 +229,7 @@ router.post('/generate-followup', async (req, res) => {
     );
     const daysSilent = hoursSilent >= 24 ? `${Math.floor(hoursSilent / 24)} día(s)` : `${hoursSilent} hora(s)`;
 
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 250,
-      temperature: 0.7,
-      system: `Eres el asistente de "${conv.business_name}" (${conv.nicho || 'negocio'}).
+    const systemPrompt = `Eres el asistente de "${conv.business_name}" (${conv.nicho || 'negocio'}).
 ${conv.ai_context ? `Contexto del negocio:\n${conv.ai_context}\n` : ''}
 Genera UN mensaje de seguimiento natural para retomar contacto con ${conv.contact_name}, quien lleva ${daysSilent} sin responder.
 
@@ -250,12 +239,17 @@ Reglas estrictas:
 - Menciona algo concreto de la conversación si es posible
 - Usa su nombre (${conv.contact_name})
 - Incluye una pregunta abierta al final
-- Solo el mensaje listo para enviar, sin comillas, sin explicaciones`,
+- Solo el mensaje listo para enviar, sin comillas, sin explicaciones`;
+
+    const response = await geminiRequest({
+      model: 'gemini-3.5-flash',
+      systemPrompt,
       messages: [{ role: 'user', content: `Historial:\n${transcript}` }],
+      temperature: 0.7,
+      maxTokens: 250,
     });
 
-    const suggestion = (response.content.find((c) => c.type === 'text') as any)?.text?.trim() || '';
-    res.json({ suggestion, hoursSilent, contact_name: conv.contact_name });
+    res.json({ suggestion: response.text.trim(), hoursSilent, contact_name: conv.contact_name });
   } catch (err: any) {
     console.error('[generate-followup]', err);
     res.status(500).json({ error: err.message || 'Failed to generate follow-up' });

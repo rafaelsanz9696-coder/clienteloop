@@ -630,12 +630,15 @@ function MessageBubble({
 }
 
 // Helpers
-function injectVariables(text: string, contact: any): string {
+function injectVariables(text: string, contact: any, activeBusiness?: any): string {
   if (!contact) return text;
+  const slug = activeBusiness?.booking_slug || 'agenda';
+  const link = `clienteloop.app/book/${slug}`;
   return text
     .replace(/\{\{nombre\}\}/g, contact.name || 'Cliente')
     .replace(/\{\{canal\}\}/g, contact.channel || 'chat')
-    .replace(/\{\{etapa\}\}/g, contact.stage || 'nuevo');
+    .replace(/\{\{etapa\}\}/g, contact.stage || 'nuevo')
+    .replace(/\{\{booking_link\}\}/g, link);
 }
 
 // Conversation Thread
@@ -646,6 +649,9 @@ function ConversationThread({
   conversationId: number;
   onBack: () => void;
 }) {
+  const { activeBusiness } = useBusiness();
+  const [popSearch, setPopSearch] = useState('');
+  const [popCategory, setPopCategory] = useState('all');
   const [messageText, setMessageText] = useState('');
   const [sending, setSending] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(false);
@@ -664,7 +670,7 @@ function ConversationThread({
   const [buttonText, setButtonText] = useState('');
   const [buttonOptions, setButtonOptions] = useState(['', '', '']);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { data: conversation } = useApi(
+  const { data: conversation, loading: convLoading, error: convError } = useApi(
     () => api.getConversation(conversationId),
     [conversationId]
   );
@@ -678,6 +684,7 @@ function ConversationThread({
   const {
     data: messages,
     loading: messagesLoading,
+    error: messagesError,
     setData: setMessages,
   } = useApi(() => api.getMessages(conversationId), [conversationId]);
   const { data: quickReplies } = useApi(() => api.getQuickReplies(), []);
@@ -713,6 +720,35 @@ function ConversationThread({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  if (convLoading && !conversation) {
+    return (
+      <div className="flex flex-col h-full bg-white items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (convError || messagesError) {
+    return (
+      <div className="flex flex-col h-full bg-white items-center justify-center p-6 text-center">
+        <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-4">
+          <X className="w-8 h-8" />
+        </div>
+        <h3 className="text-lg font-bold text-slate-800 mb-2">Error al cargar conversación</h3>
+        <p className="text-sm text-slate-500 max-w-sm mb-6">
+          {convError || messagesError || 'No se pudo cargar la conversación seleccionada. Es posible que pertenezca a otro negocio o que el servidor no responda.'}
+        </p>
+        <button
+          onClick={onBack}
+          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition-colors flex items-center gap-2"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          Volver a la lista
+        </button>
+      </div>
+    );
+  }
 
   async function handleSend() {
     if (!messageText.trim() || sending) return;
@@ -838,10 +874,14 @@ function ConversationThread({
       e.preventDefault();
       handleSend();
     }
+    if (e.key === '/' && messageText === '') {
+      e.preventDefault();
+      setShowQuickReplies(true);
+    }
   }
 
   function insertQuickReply(qr: QuickReply) {
-    const content = injectVariables(qr.content, contact);
+    const content = injectVariables(qr.content, contact, activeBusiness);
     setMessageText(content);
     setAiEscalate(false);
     setShowQuickReplies(false);
@@ -1020,21 +1060,7 @@ function ConversationThread({
         )}
       </div>
 
-      {/* Quick replies dropdown */}
-      {showQuickReplies && quickReplies && quickReplies.length > 0 && (
-        <div className="border-t border-slate-100 bg-slate-50 max-h-48 overflow-y-auto">
-          {quickReplies.map((qr) => (
-            <button
-              key={qr.id}
-              onClick={() => insertQuickReply(qr)}
-              className="w-full text-left px-4 py-2.5 hover:bg-white border-b border-slate-100 last:border-0"
-            >
-              <span className="text-xs font-medium text-blue-600">{qr.title}</span>
-              <p className="text-xs text-slate-500 truncate mt-0.5">{qr.content}</p>
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Quick replies dropdown (moved to floating popover in composer) */}
 
       {/* AI Suggestion */}
       {(aiSuggestion || aiEscalate) && (
@@ -1078,7 +1104,117 @@ function ConversationThread({
       )}
 
       {/* Composer */}
-      <div className="p-3 border-t border-slate-100">
+      <div className="p-3 border-t border-slate-100 relative">
+        {/* Gorgeous Quick Replies Floating Popover */}
+        {showQuickReplies && (
+          <div className="absolute bottom-full left-3 right-3 mb-2 bg-white border border-slate-200/80 rounded-2xl shadow-2xl z-30 max-h-[340px] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200">
+            {/* Popover Header */}
+            <div className="p-3 border-b border-slate-100 bg-slate-50/50 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500 animate-bounce" />
+                  Respuestas Rápidas Premium
+                </span>
+                <button
+                  onClick={() => setShowQuickReplies(false)}
+                  className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Search input */}
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                <input
+                  type="text"
+                  value={popSearch}
+                  onChange={(e) => setPopSearch(e.target.value)}
+                  placeholder="Buscar por título o contenido..."
+                  className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500 bg-white"
+                  autoFocus
+                />
+              </div>
+
+              {/* Category filter pills */}
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
+                {['all', 'saludo', 'servicios', 'ubicacion', 'horarios', 'seguimiento'].map((cat) => {
+                  const isSelected = popCategory === cat;
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => setPopCategory(cat)}
+                      className={cn(
+                        "px-2.5 py-1 rounded-lg text-[10px] font-bold capitalize transition-all border shrink-0",
+                        isSelected
+                          ? "bg-slate-900 border-slate-900 text-white"
+                          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                      )}
+                    >
+                      {cat === 'all' ? 'Ver Todos' : cat}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Popover List */}
+            <div className="flex-1 overflow-y-auto p-2 space-y-1 max-h-[220px]">
+              {(() => {
+                const filtered = (quickReplies || []).filter((qr) => {
+                  const matchesSearch =
+                    qr.title.toLowerCase().includes(popSearch.toLowerCase()) ||
+                    qr.content.toLowerCase().includes(popSearch.toLowerCase());
+                  const matchesCategory =
+                    popCategory === 'all' || (qr.category || 'general') === popCategory;
+                  return matchesSearch && matchesCategory;
+                });
+
+                if (filtered.length > 0) {
+                  const CATEGORY_STYLES_MAP: Record<string, string> = {
+                    saludo: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+                    servicios: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+                    ubicacion: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20',
+                    horarios: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+                    seguimiento: 'bg-rose-500/10 text-rose-600 border-rose-500/20',
+                    general: 'bg-slate-500/10 text-slate-600 border-slate-500/20',
+                  };
+
+                  return filtered.map((qr) => {
+                    const style = CATEGORY_STYLES_MAP[qr.category || 'general'] || CATEGORY_STYLES_MAP.general;
+                    const interpolated = injectVariables(qr.content, contact, activeBusiness);
+                    return (
+                      <button
+                        key={qr.id}
+                        onClick={() => insertQuickReply(qr)}
+                        className="w-full text-left p-2.5 hover:bg-amber-50/20 hover:border-amber-500/30 rounded-xl border border-transparent transition-all flex flex-col gap-1 group"
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className="text-xs font-bold text-slate-800 group-hover:text-amber-600 transition-colors">
+                            {qr.title}
+                          </span>
+                          <span className={cn("text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded border tracking-wide", style)}>
+                            {qr.category || 'general'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
+                          {interpolated}
+                        </p>
+                      </button>
+                    );
+                  });
+                } else {
+                  return (
+                    <div className="py-6 text-center text-xs text-slate-400">
+                      No se encontraron respuestas rápidas.
+                    </div>
+                  );
+                }
+              })()}
+            </div>
+          </div>
+        )}
+
         <div className="flex items-end gap-2">
           <button
             onClick={() => setShowQuickReplies(!showQuickReplies)}
@@ -1177,7 +1313,13 @@ function ConversationThread({
 
           <textarea
             value={messageText}
-            onChange={(e) => setMessageText(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setMessageText(val);
+              if (val === '/') {
+                setShowQuickReplies(true);
+              }
+            }}
             onKeyDown={handleKeyDown}
             placeholder="Escribe un mensaje..."
             rows={1}

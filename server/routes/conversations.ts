@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import Anthropic from '@anthropic-ai/sdk';
 import db from '../db/database.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
+import { geminiRequest } from '../lib/gemini.js';
 
 const router = Router();
 
@@ -177,8 +177,8 @@ router.patch('/:id/intent', async (req: AuthenticatedRequest, res) => {
 // POST /api/conversations/:id/detect-intent — auto-detect via AI
 router.post('/:id/detect-intent', async (req: AuthenticatedRequest, res) => {
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured' });
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({ error: 'GEMINI_API_KEY not configured' });
     }
 
     // Load conversation + first 8 messages + business nicho
@@ -207,19 +207,18 @@ router.post('/:id/detect-intent', async (req: AuthenticatedRequest, res) => {
       .map((m: any) => `${m.sender === 'client' ? 'Cliente' : 'Negocio'}: ${m.content}`)
       .join('\n');
 
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 30,
+    const response = await geminiRequest({
+      model: 'gemini-1.5-flash',
+      maxTokens: 30,
       temperature: 0,
-      system: `Eres un clasificador de intenciones de clientes para el negocio "${conv.business_name}" (${conv.nicho || 'general'}).
+      systemPrompt: `Eres un clasificador de intenciones de clientes para el negocio "${conv.business_name}" (${conv.nicho || 'general'}).
 Analiza los primeros mensajes de la conversación e identifica en 2-4 palabras qué busca el cliente.
 Responde ÚNICAMENTE con la etiqueta, sin explicación ni puntuación. Ejemplos de formato:
 Compra Shein, Envío local, Envío internacional, Personal shopper, Consulta precio, Reserva cita, Problema entrega, Información general`,
       messages: [{ role: 'user', content: `Conversación:\n${transcript}` }],
     });
 
-    const raw = (response.content.find((c) => c.type === 'text') as any)?.text?.trim() || '';
+    const raw = response.text?.trim() || '';
     const intent_label = raw.slice(0, 100) || null;
 
     // Persist it
