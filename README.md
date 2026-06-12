@@ -1,20 +1,49 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# ClienteLoop
 
-# Run and deploy your AI Studio app
+ClienteLoop is a Spanish-first CRM and unified inbox for small businesses. It connects customer conversations, follow-up tasks, appointments, broadcasts, and niche-specific AI responses in one workspace.
 
-This contains everything you need to run your app locally.
+## Stack
 
-View your app in AI Studio: https://ai.studio/apps/3b051711-28b7-435f-ba9d-cea02b69b5e8
+- Frontend: React, Vite, Tailwind CSS
+- Backend: Express, PostgreSQL/Supabase
+- Auth: Supabase Auth
+- Messaging: Meta WhatsApp Cloud API, with Embedded Signup/Coexistence support in progress
+- Realtime: Socket.IO
+- Billing: Stripe
+- AI: Google Gemini
 
-## Run Locally
-
-**Prerequisites:**  Node.js
-
+## Local Setup
 
 1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+
+```bash
+npm install
+```
+
+2. Copy `.env.example` to `.env` and fill in the required values.
+
+3. Start frontend and backend:
+
+```bash
+npm run dev
+```
+
+Frontend runs on `http://localhost:4000` and the API runs on `http://localhost:3001`.
+
+## Useful Commands
+
+```bash
+npm run lint
+npm run build
+npm run test:e2e
+```
+
+## WhatsApp Notes
+
+- `META_PHONE_ID` is Meta's Phone Number ID, not the display phone number.
+- `META_VERIFY_TOKEN` is used only for webhook verification setup.
+- `META_APP_SECRET` is used to validate Meta webhook signatures.
+- `ENABLE_CHANNELS=false` keeps WhatsApp sending in simulation mode.
+- `ENABLE_CHANNELS=true` sends real messages through Meta Cloud API.
+
+Embedded Signup and Coexistence require the appropriate Meta app review permissions before this can be offered to external businesses.

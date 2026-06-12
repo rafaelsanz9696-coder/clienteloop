@@ -117,7 +117,7 @@ export default function PrivacyPage() {
               <li><strong className="text-white">Supabase</strong> — Database hosting and authentication</li>
               <li><strong className="text-white">Meta / WhatsApp</strong> — To deliver and receive messages via the Business API</li>
               <li><strong className="text-white">Stripe</strong> — Payment processing for subscriptions</li>
-              <li><strong className="text-white">Anthropic (Claude)</strong> — AI processing for insights and auto-replies (no data is used to train models)</li>
+              <li><strong className="text-white">Google Gemini</strong> — AI processing for insights and auto-replies (no data is used to train models)</li>
               <li><strong className="text-white">Sentry</strong> — Error monitoring (anonymized stack traces only)</li>
             </ul>
           </section>

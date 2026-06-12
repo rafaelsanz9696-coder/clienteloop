@@ -1055,7 +1055,7 @@ function ConversationThread({
           </>
         ) : (
           <p className="text-sm text-slate-400 text-center py-8">
-            Sin mensajes aun
+            Sin mensajes aún
           </p>
         )}
       </div>
@@ -1068,7 +1068,7 @@ function ConversationThread({
           {aiEscalate ? (
             <div className="flex items-center gap-2">
               <span className="text-sm text-amber-700 font-medium">
-                Este mensaje requiere atencion humana. Considera asignarlo a un miembro del equipo.
+                Este mensaje requiere atención humana. Considera asignarlo a un miembro del equipo.
               </span>
               <button onClick={dismissAiSuggestion} className="text-slate-400 hover:text-slate-600 ml-auto shrink-0">
                 <X className="w-4 h-4" />

@@ -604,7 +604,7 @@ function ImportCSVModal({ onClose, onImported }: { onClose: () => void; onImport
                 ) : (
                   <>
                     <p className="text-sm text-slate-500">Arrastra tu CSV aquí o <span className="text-blue-500 font-medium">selecciona un archivo</span></p>
-                    <p className="text-xs text-slate-400 mt-1">Columnas soportadas: Nombre, Telefono, Email, Canal, Etapa, Notas</p>
+                    <p className="text-xs text-slate-400 mt-1">Columnas soportadas: Nombre, Teléfono, Email, Canal, Etapa, Notas</p>
                   </>
                 )}
                 <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden"
@@ -810,7 +810,7 @@ export default function ContactsPage() {
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input type="text" placeholder="Buscar por nombre, telefono, email..." value={search} onChange={(e) => setSearch(e.target.value)}
+            <input type="text" placeholder="Buscar por nombre, teléfono, email..." value={search} onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div className="flex gap-1 flex-wrap">

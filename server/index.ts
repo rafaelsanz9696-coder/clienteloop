@@ -37,6 +37,8 @@ import broadcastsRouter from './routes/broadcasts.js';
 import teamRouter from './routes/team.js';
 import billingRouter from './routes/billing.js';
 import mediaRouter from './routes/media.js';
+import baileysRouter from './routes/baileys.js';
+import { BaileysAdapter } from './channels/baileys.adapter.js';
 import { errorLogger } from './middleware/errorLogger.js';
 import { requireAuth } from './middleware/auth.js';
 import { initSocket } from './lib/socket.js';
@@ -83,7 +85,16 @@ initSocket(httpServer);
 app.use(helmet({ contentSecurityPolicy: false })); // CSP disabled for SPA
 const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:4000';
 app.use(cors({ origin: corsOrigin, credentials: true }));
-app.use(express.json({ limit: '5mb' }));
+const jsonParser = express.json({
+  limit: '5mb',
+  verify: (req, _res, buf) => {
+    (req as any).rawBody = buf;
+  },
+});
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/billing/webhook') return next();
+  return jsonParser(req, res, next);
+});
 
 // Rate limiting for public endpoints
 const webhookLimiter = rateLimit({
@@ -134,6 +145,7 @@ app.use('/api/broadcasts', requireAuth, broadcastsRouter);
 app.use('/api/team', requireAuth, teamRouter);
 app.use('/api/billing', billingRouter);
 app.use('/api/media', requireAuth, mediaRouter);
+app.use('/api/channels/baileys', requireAuth, baileysRouter);
 
 // Global error handler
 Sentry.setupExpressErrorHandler(app);
@@ -147,4 +159,9 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 httpServer.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`API Server running on port ${PORT}`);
   console.log(`   Health: http://localhost:${PORT}/api/health`);
+
+  // Re-link WhatsApp QR (Baileys) sessions persisted on disk
+  BaileysAdapter.restoreSessions().catch((err) =>
+    console.error('[Baileys] Session restore failed:', err),
+  );
 });

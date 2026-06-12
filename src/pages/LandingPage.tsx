@@ -46,7 +46,7 @@ const nichos = [
 ];
 
 const features = [
-  { icon: MessageSquare, title: 'Inbox unificado',      desc: 'WhatsApp, Instagram y email en una sola bandeja. Nunca mas pierdas un mensaje.' },
+  { icon: MessageSquare, title: 'Inbox unificado',      desc: 'WhatsApp, Instagram y email en una sola bandeja. Nunca más pierdas un mensaje.' },
   { icon: Users,         title: 'CRM inteligente',      desc: 'Perfil de cada cliente con historial completo, notas, etiquetas y etapa en el pipeline.' },
   { icon: Bot,           title: 'IA por industria',     desc: 'Respuestas automaticas que entienden tu negocio. No es una IA generica, es tu asistente.' },
   { icon: BarChart3,     title: 'Pipeline de ventas',   desc: 'Visualiza cada oportunidad desde el primer contacto hasta el cierre.' },
@@ -60,7 +60,7 @@ const testimonials = [
     role: 'Dueña, Salon Glow',
     location: 'Santo Domingo, RD',
     rating: 5,
-    text: 'Antes perdia citas porque no podia contestar WhatsApp mientras trabajaba. Ahora la IA responde, agenda y hasta manda recordatorios sola. Mis no-shows bajaron a casi cero.',
+    text: 'Antes perdía citas porque no podía contestar WhatsApp mientras trabajaba. Ahora la IA responde, agenda y hasta manda recordatorios sola. Mis no-shows bajaron a casi cero.',
     avatar: 'MR',
     color: 'from-pink-500 to-rose-500',
   },
@@ -69,7 +69,7 @@ const testimonials = [
     role: 'Director, Clinica Bienestar',
     location: 'Bogota, CO',
     rating: 5,
-    text: 'Teniamos 3 personas contestando WhatsApp y aun asi se nos iban mensajes. ClienteLoop unificó todo y la IA maneja el 70% de las consultas. Ese equipo ahora hace otras cosas.',
+    text: 'Teníamos 3 personas contestando WhatsApp y aún así se nos iban mensajes. ClienteLoop unificó todo y la IA maneja el 70% de las consultas. Ese equipo ahora hace otras cosas.',
     avatar: 'CM',
     color: 'from-blue-500 to-cyan-500',
   },
@@ -208,7 +208,7 @@ function ProblemSection() {
         <div className="grid sm:grid-cols-3 gap-6">
           {[
             { num: '67%',   label: 'de clientes no reciben seguimiento' },
-            { num: '3.5x',  label: 'mas ventas con respuesta en menos de 5 min' },
+            { num: '3.5x',  label: 'más ventas con respuesta en menos de 5 min' },
             { num: '45 min',label: 'promedio diario perdido cambiando apps' },
           ].map(({ num, label }) => (
             <div key={num} className="p-6 bg-slate-800/50 rounded-2xl border border-slate-700/50">
@@ -261,7 +261,7 @@ function Features() {
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-14">
           <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">
-            Todo lo que necesitas para cerrar mas ventas
+            Todo lo que necesitas para cerrar más ventas
           </h2>
           <p className="text-slate-400 max-w-xl mx-auto">
             Una plataforma completa. Sin fragmentacion. Sin herramientas extras.
@@ -321,7 +321,7 @@ function Testimonials() {
             Negocios que ya cerraron el bucle
           </h2>
           <p className="text-slate-400 max-w-xl mx-auto">
-            De salon de belleza a inmobiliaria. El patron es siempre el mismo: mas respuestas, mas ventas.
+            De salón de belleza a inmobiliaria. El patrón es siempre el mismo: más respuestas, más ventas.
           </p>
         </div>
         <div className="grid md:grid-cols-3 gap-6">

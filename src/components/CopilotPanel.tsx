@@ -2,7 +2,7 @@
  * CopilotPanel.tsx — AI Copilot Flotante
  *
  * Floating button (bottom-right) + slide-in panel that lets the business
- * owner operate the CRM via natural language using Anthropic tool use.
+ * owner operate the CRM via natural language using Gemini function calling.
  */
 
 import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react';

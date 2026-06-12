@@ -1,8 +1,8 @@
 /**
  * gemini.ts — Central gateway for Google Gemini Developer API
  *
- * Provides functions to map Claude/Anthropic system prompts, messages,
- * and tool declarations into Gemini API payloads and handles non-streaming
+ * Provides functions to map chat prompts, messages, and tool declarations
+ * into Gemini API payloads and handles non-streaming
  * as well as SSE streaming responses.
  */
 
@@ -21,7 +21,6 @@ function resolveModelName(requestedModel: string): string {
 function getApiKey(): string {
   const key = process.env.GEMINI_API_KEY;
   if (!key) {
-    // Graceful fallback to Anthropic key if Gemini is missing, but warn the user
     console.warn('[Gemini] GEMINI_API_KEY is not set. Please configure it in your .env file.');
     return '';
   }
@@ -48,7 +47,7 @@ function convertSchemaToGemini(schema: any): any {
   return newSchema;
 }
 
-// Convert Anthropic tools array to Gemini function declarations format
+// Convert tool definitions to Gemini function declarations format
 function convertToolsToGemini(tools: any[]): any[] {
   return tools.map((t) => ({
     name: t.name,
@@ -57,7 +56,7 @@ function convertToolsToGemini(tools: any[]): any[] {
   }));
 }
 
-// Convert Anthropic-style messages to Gemini-style contents
+// Convert chat messages to Gemini-style contents
 export function convertMessagesToGemini(messages: any[]): any[] {
   const contents: any[] = [];
 
@@ -183,13 +182,13 @@ export async function geminiRequest(params: {
       toolCalls.push({
         name: part.functionCall.name,
         args: part.functionCall.args || {},
-        id: part.functionCall.name + '_' + Math.random().toString(36).substr(2, 5), // Generate a random ID to mimic Anthropic tool call IDs
+        id: part.functionCall.name + '_' + Math.random().toString(36).substr(2, 5),
         thoughtSignature: part.thoughtSignature,
       });
     }
   }
 
-  // Map Gemini usage to Anthropic structure
+  // Map Gemini usage to the app's shared token usage shape.
   const inputTokens = data.usageMetadata?.promptTokenCount || 0;
   const outputTokens = data.usageMetadata?.candidatesTokenCount || 0;
 

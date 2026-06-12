@@ -38,6 +38,31 @@ function verifyInfobipSignature(req: any): boolean {
 
 // ─── Multi-tenant: resolve business_id from channel number ──────────────────
 
+function verifyMetaSignature(req: any): boolean {
+  const appSecret = process.env.META_APP_SECRET;
+  if (!appSecret) {
+    // Keep local webhook simulations easy, but require signatures in production.
+    return process.env.NODE_ENV !== 'production';
+  }
+
+  const signature = req.headers['x-hub-signature-256'];
+  if (!signature || typeof signature !== 'string') return false;
+
+  const rawBody = req.rawBody;
+  if (!rawBody) return false;
+
+  const expected = `sha256=${crypto
+    .createHmac('sha256', appSecret)
+    .update(rawBody)
+    .digest('hex')}`;
+
+  try {
+    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}
+
 async function resolveBusinessId(channel: string, identifier: string): Promise<number | null> {
   const { rows } = await db.query(
     'SELECT business_id FROM channel_numbers WHERE channel = $1 AND identifier = $2',
@@ -48,7 +73,7 @@ async function resolveBusinessId(channel: string, identifier: string): Promise<n
 
 // ─── Shared helper ───────────────────────────────────────────────────────────
 
-async function processIncomingMessage(
+export async function processIncomingMessage(
   businessId: number,
   phone: string | null,
   email: string | null,
@@ -190,7 +215,16 @@ router.get('/meta/whatsapp', (req, res) => {
 router.post('/meta/whatsapp', async (req, res) => {
   try {
     const body = req.body; // already parsed by global express.json()
-    console.log('[Meta Webhook POST] Payload arriving:', JSON.stringify(body, null, 2));
+
+    if (!verifyMetaSignature(req)) {
+      console.warn('[Meta Webhook] Invalid signature');
+      return res.sendStatus(403);
+    }
+
+    console.log('[Meta Webhook POST] Payload received', {
+      object: body?.object,
+      entries: Array.isArray(body?.entry) ? body.entry.length : 0,
+    });
 
     if (body.object !== 'whatsapp_business_account') {
       return res.sendStatus(200);

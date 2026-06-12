@@ -56,7 +56,7 @@ export async function processRetryQueue(): Promise<void> {
     const phoneId     = chRows[0]?.identifier   ?? process.env.META_PHONE_ID ?? '';
     const accessToken = chRows[0]?.access_token ?? undefined;
 
-    const result = await sendDirectWhatsApp(row.to_phone, row.content, phoneId, accessToken);
+    const result = await sendDirectWhatsApp(row.to_phone, row.content, phoneId, accessToken, row.business_id ?? undefined);
 
     if (result.sent) {
       await db.query(

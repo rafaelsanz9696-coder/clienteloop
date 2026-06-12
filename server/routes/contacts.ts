@@ -165,7 +165,7 @@ router.get('/export', async (req: AuthenticatedRequest, res) => {
       [bid]
     );
     const esc = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const header = ['Nombre', 'Telefono', 'Email', 'Canal', 'Etapa', 'Etiquetas', 'Notas', 'Creado'].map(esc).join(',');
+    const header = ['Nombre', 'Teléfono', 'Email', 'Canal', 'Etapa', 'Etiquetas', 'Notas', 'Creado'].map(esc).join(',');
     const csvRows = rows.map(c => {
       const tagList = (() => { try { return (JSON.parse(c.tags) as string[]).join('; '); } catch { return ''; } })();
       return [

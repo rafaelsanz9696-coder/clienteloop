@@ -54,7 +54,7 @@ export const AutomationService = {
             content: m.content,
         }));
 
-        // Anthropic requires strictly alternating roles (user, assistant, user).
+        // The AI gateway expects strictly alternating roles (user, assistant, user).
         // If a user sends 2 messages in a row, we must collapse them into 1.
         const history: Array<{ role: 'user' | 'assistant'; content: string }> = [];
         for (const msg of rawHistory) {

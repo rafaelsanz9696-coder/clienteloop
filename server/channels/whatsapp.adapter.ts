@@ -2,6 +2,7 @@ import db from '../db/database.js';
 import { AutomationService } from '../lib/automation.js';
 import { getIo } from '../lib/socket.js';
 import { enqueueRetry } from '../lib/wa-retry.js';
+import { BaileysAdapter } from './baileys.adapter.js';
 
 /**
  * Send a WhatsApp message directly to a phone number without a conversation.
@@ -12,6 +13,7 @@ export async function sendDirectWhatsApp(
   text: string,
   phoneId: string,
   accessToken?: string,  // per-business token from channel_numbers; falls back to env var
+  businessId?: number,   // when provided, prefer the business's Baileys (QR) session
 ): Promise<{ sent: boolean; reason?: string }> {
   const cleanPhone = phone.replace(/\D/g, '');
   if (!cleanPhone) return { sent: false, reason: 'Invalid phone number' };
@@ -19,6 +21,18 @@ export async function sendDirectWhatsApp(
   if (process.env.ENABLE_CHANNELS !== 'true') {
     console.log(`[Reminder] CHANNELS disabled — would send to +${cleanPhone}: "${text.substring(0, 60)}..."`);
     return { sent: true, reason: 'simulated (ENABLE_CHANNELS=false)' };
+  }
+
+  // Prefer Baileys (QR-linked) session when available; callers without business
+  // context fall back to the single connected session if there is one.
+  const baileysBid =
+    businessId && BaileysAdapter.isConnected(businessId)
+      ? businessId
+      : businessId === undefined
+        ? BaileysAdapter.getAnyConnectedBusinessId()
+        : null;
+  if (baileysBid != null) {
+    return BaileysAdapter.sendMessage(baileysBid, cleanPhone, text);
   }
 
   const token = accessToken ?? process.env.META_ACCESS_TOKEN;
@@ -99,8 +113,32 @@ export const WhatsAppAdapter = {
       `, [text, conversationId]);
     }
 
-    // If real channels are enabled, send via Meta API
+    // If real channels are enabled, send via Baileys (QR session) or Meta API
     if (process.env.ENABLE_CHANNELS === 'true') {
+      const businessId = bRows[0]?.business_id;
+
+      if (businessId && BaileysAdapter.isConnected(businessId)) {
+        const { rows: cRows } = await db.query(`
+          SELECT ct.phone
+          FROM conversations c
+          JOIN contacts ct ON c.contact_id = ct.id
+          WHERE c.id = $1
+        `, [conversationId]);
+
+        const phone = cRows[0]?.phone;
+        if (!phone) {
+          console.warn(`[Baileys] No phone number found for conversation ${conversationId}`);
+          return { success: true, messageId: msgId };
+        }
+
+        const result = await BaileysAdapter.sendMessage(businessId, phone, text, media);
+        if (!result.sent) {
+          console.error(`[Baileys] Send failed (${result.reason}) — queueing retry`);
+          await enqueueRetry(businessId, conversationId, phone, text, msgId);
+        }
+        return { success: true, messageId: msgId };
+      }
+
       // Look up per-business token from channel_numbers; fall back to global env vars
       const { rows: chRows } = await db.query(
         `SELECT identifier, access_token FROM channel_numbers

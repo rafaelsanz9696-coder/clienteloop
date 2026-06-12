@@ -16,6 +16,7 @@ import { parseWhatsAppChat, formatChatForAnalysis, getChatStats } from '../lib/c
 import QuickRepliesTab from '../components/settings/QuickRepliesTab';
 import MemoriesTab from '../components/settings/MemoriesTab';
 import AISetupAssistant from '../components/AISetupAssistant';
+import BaileysConnect from '../components/settings/BaileysConnect';
 import type { TeamMember, TeamInvitation } from '../types/index';
 
 const NICHOS = [
@@ -39,6 +40,23 @@ const CHANNEL_OPTS = [
   { value: 'sms', label: 'SMS', icon: Phone, placeholder: '+521234567890' },
   { value: 'email', label: 'Email', icon: Mail, placeholder: 'soporte@minegocio.com' },
 ] as const;
+
+type EmbeddedSignupData = {
+  waba_id?: string;
+  phone_number_id?: string;
+  business_id?: string;
+};
+
+function parseEmbeddedSignupMessage(event: MessageEvent): EmbeddedSignupData | null {
+  const origin = new URL(event.origin);
+  if (origin.hostname !== 'facebook.com' && !origin.hostname.endsWith('.facebook.com')) return null;
+
+  const payload = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+  if (payload?.type !== 'WA_EMBEDDED_SIGNUP') return null;
+  if (!['FINISH', 'FINISH_ONLY_WABA'].includes(payload.event)) return null;
+
+  return payload.data ?? null;
+}
 
 // ─── Channels Tab ────────────────────────────────────────────────────────────
 function ChannelsTab() {
@@ -139,6 +157,94 @@ function ChannelsTab() {
     }
   }
 
+  async function handleEmbeddedSignupV2() {
+    if (!window.FB) {
+      toast.error('Facebook SDK aún cargando, intenta en un momento');
+      return;
+    }
+    if (!import.meta.env.VITE_FACEBOOK_CONFIG_ID) {
+      toast.error('VITE_FACEBOOK_CONFIG_ID no configurado en Vercel');
+      return;
+    }
+
+    setConnecting(true);
+    try {
+      let signupData: EmbeddedSignupData | null = null;
+
+      const signupPromise = new Promise<EmbeddedSignupData | null>((resolve) => {
+        const timeout = setTimeout(() => {
+          window.removeEventListener('message', handleMessage);
+          resolve(signupData);
+        }, 60_000);
+
+        function handleMessage(event: MessageEvent) {
+          try {
+            const parsed = parseEmbeddedSignupMessage(event);
+            if (!parsed) return;
+            signupData = parsed;
+            clearTimeout(timeout);
+            window.removeEventListener('message', handleMessage);
+            resolve(parsed);
+          } catch {
+            // Ignore unrelated postMessage payloads.
+          }
+        }
+
+        window.addEventListener('message', handleMessage);
+      });
+
+      const code = await new Promise<string>((resolve, reject) => {
+        window.FB.login(
+          (response: any) => {
+            if (!response.authResponse) {
+              reject(new Error('Conexión cancelada'));
+              return;
+            }
+
+            const authCode = response.authResponse.code;
+            if (!authCode) {
+              reject(new Error('Meta no devolvió el código de autorización. Revisa la configuración del App.'));
+              return;
+            }
+
+            if (response.authResponse.waba_id) {
+              signupData = {
+                ...signupData,
+                waba_id: response.authResponse.waba_id,
+                phone_number_id: response.authResponse.phone_number_id,
+              };
+            }
+
+            resolve(authCode);
+          },
+          {
+            config_id: import.meta.env.VITE_FACEBOOK_CONFIG_ID,
+            response_type: 'code',
+            override_default_response_type: true,
+            extras: {
+              feature: 'whatsapp_embedded_signup',
+              sessionInfoVersion: 2,
+            },
+          }
+        );
+      });
+
+      const embeddedData = (await signupPromise) ?? signupData;
+      if (!embeddedData?.waba_id) {
+        toast.error('Meta no devolvió el WABA ID. Revisa la configuración de Embedded Signup.');
+        return;
+      }
+
+      const result = await api.connectWhatsApp(code, embeddedData.waba_id, embeddedData.phone_number_id);
+      toast.success(`WhatsApp conectado: ${result.display_phone_number}`);
+      refetch();
+    } catch (err: any) {
+      toast.error(err.message || 'Error al conectar WhatsApp. Intenta de nuevo.');
+    } finally {
+      setConnecting(false);
+    }
+  }
+
   async function handleAddWaManual() {
     if (!waPhoneId.trim()) return;
     setSavingWa(true);
@@ -199,7 +305,7 @@ function ChannelsTab() {
           <span className="text-sm font-semibold text-slate-800">WhatsApp Business</span>
           {waConnectedViaMeta && (
             <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
-              <CheckCircle2 className="w-3 h-3" /> Conectado via Meta
+              <CheckCircle2 className="w-3 h-3" /> Conectado vía Meta
             </span>
           )}
         </div>
@@ -240,7 +346,7 @@ function ChannelsTab() {
               ¿Quieres conectar por Meta para habilitar Coexistence?
             </p>
             <button
-              onClick={handleEmbeddedSignup}
+              onClick={handleEmbeddedSignupV2}
               disabled={connecting}
               className="flex items-center gap-2 px-4 py-2 bg-[#1877F2] text-white text-sm font-semibold rounded-lg hover:bg-[#166ee1] disabled:opacity-60 transition-colors"
             >
@@ -256,7 +362,7 @@ function ChannelsTab() {
               Conecta tu número de WhatsApp Business en segundos. Tu número sigue activo en la app del teléfono (Coexistence) y el CRM recibe y envía mensajes con IA en paralelo.
             </p>
             <button
-              onClick={handleEmbeddedSignup}
+              onClick={handleEmbeddedSignupV2}
               disabled={connecting}
               className="flex items-center gap-2 px-4 py-2.5 bg-[#1877F2] text-white text-sm font-semibold rounded-lg hover:bg-[#166ee1] disabled:opacity-60 transition-colors shadow-sm"
             >
@@ -313,6 +419,9 @@ function ChannelsTab() {
           </>
         )}
       </div>
+
+      {/* ── WhatsApp QR (Baileys coexistence — no Meta approval needed) ── */}
+      <BaileysConnect />
 
       {/* ── Other channels (SMS, Email) ── */}
       <div className="space-y-3">
@@ -1308,7 +1417,7 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">Dueno/a</label>
+              <label className="text-sm font-medium text-slate-700 mb-1 block">Dueño/a</label>
               <input
                 type="text"
                 value={form.owner_name}
@@ -1342,7 +1451,7 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-slate-700 mb-1 block">Telefono</label>
+              <label className="text-sm font-medium text-slate-700 mb-1 block">Teléfono</label>
               <input
                 type="text"
                 value={form.phone}
@@ -1353,7 +1462,7 @@ export default function SettingsPage() {
           </div>
 
           <div>
-            <label className="text-sm font-medium text-slate-700 mb-1 block">Horarios de Atencion</label>
+            <label className="text-sm font-medium text-slate-700 mb-1 block">Horarios de Atención</label>
             <input
               type="text"
               value={form.working_hours}
@@ -1376,13 +1485,13 @@ export default function SettingsPage() {
               </button>
             </div>
             <p className="text-xs text-slate-400 mb-2">
-              Describe tu negocio, servicios, precios, etc. La IA usara esta informacion para responder a tus clientes.
+              Describe tu negocio, servicios, precios, etc. La IA usará esta información para responder a tus clientes.
             </p>
             <textarea
               value={form.ai_context}
               onChange={(e) => setForm({ ...form, ai_context: e.target.value })}
               rows={5}
-              placeholder="Ej: Somos un salon de belleza ubicado en CDMX. Ofrecemos cortes desde $200, tintes desde $500..."
+              placeholder="Ej: Somos un salón de belleza ubicado en CDMX. Ofrecemos cortes desde $200, tintes desde $500..."
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -1566,7 +1675,7 @@ export default function SettingsPage() {
               {!aiLogs || aiLogs.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
-                    No hay logs de IA registrados aun del negocio
+                    No hay logs de IA registrados aún del negocio
                   </td>
                 </tr>
               ) : (
@@ -1582,7 +1691,7 @@ export default function SettingsPage() {
                         "inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium",
                         log.escalated ? "bg-amber-100 text-amber-600" : "bg-slate-100 text-slate-500"
                       )}>
-                        {log.escalated ? "Si" : "No"}
+                        {log.escalated ? "Sí" : "No"}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-slate-400 text-right">

@@ -114,7 +114,7 @@ router.post('/channels', async (req: AuthenticatedRequest, res) => {
 router.post('/channels/whatsapp/connect', async (req: AuthenticatedRequest, res) => {
   try {
     const businessId = req.user!.business_id;
-    const { code, waba_id } = req.body;
+    const { code, waba_id, phone_number_id } = req.body;
     if (!code || !waba_id) {
       return res.status(400).json({ error: 'code and waba_id are required' });
     }
@@ -156,10 +156,12 @@ router.post('/channels/whatsapp/connect', async (req: AuthenticatedRequest, res)
       console.error('[WA Connect] Phone numbers fetch failed:', errText);
       return res.status(400).json({ error: `Phone numbers fetch failed: ${errText}` });
     }
-    const phonesData = await phonesRes.json() as { data: { id: string; display_phone_number: string; verified_name: string }[] };
-    const phoneEntry = phonesData.data?.[0];
+    const phonesData = await phonesRes.json() as { data: { id: string; display_phone_number: string; verified_name: string; status?: string }[] };
+    const phoneEntry = phone_number_id
+      ? phonesData.data?.find((phone) => phone.id === phone_number_id)
+      : phonesData.data?.[0];
     if (!phoneEntry) {
-      return res.status(400).json({ error: 'No phone numbers found in this WABA' });
+      return res.status(400).json({ error: 'No matching phone number found in this WABA' });
     }
 
     // Step 4: Subscribe webhooks (non-fatal — log and continue if fails)

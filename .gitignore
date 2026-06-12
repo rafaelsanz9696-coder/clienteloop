@@ -11,3 +11,5 @@ coverage/
 *.db-wal
 playwright-report/
 test-results/
+
+baileys_auth/

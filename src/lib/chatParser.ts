@@ -118,7 +118,7 @@ export function parseWhatsAppChat(raw: string): ParsedMessage[] {
 
 /**
  * Formats parsed messages into a compact string for AI analysis.
- * Trims to maxChars to stay within Claude's context budget.
+ * Trims to maxChars to stay within the AI model's context budget.
  */
 export function formatChatForAnalysis(
   messages: ParsedMessage[],

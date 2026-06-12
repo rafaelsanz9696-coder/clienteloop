@@ -181,7 +181,7 @@ router.post('/:slug', async (req: Request, res: Response) => {
         business.id,
         contactId,
         'appointment_created',
-        `Cita "${title}" agendada via link público para ${start.toLocaleString('es-MX')}`
+        `Cita "${title}" agendada vía link público para ${start.toLocaleString('es-MX')}`
       );
     }
 
