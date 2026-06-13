@@ -25,7 +25,7 @@ import { processIncomingMessage } from '../routes/webhooks.js';
 // Interop-safe resolution of makeWASocket (package ships CJS with default export)
 const makeWASocket: any =
   (baileys as any).makeWASocket ?? (baileys as any).default?.makeWASocket ?? (baileys as any).default;
-const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } = baileys as any;
+const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = baileys as any;
 
 const AUTH_ROOT = process.env.BAILEYS_AUTH_DIR || path.resolve('baileys_auth');
 
@@ -191,17 +191,16 @@ export const BaileysAdapter = {
 
     const sock = makeWASocket({
       version,
-      auth: {
-        creds: state.creds,
-        // Cacheable key store keeps Signal sessions consistent → fixes
-        // "Waiting for this message" decryption failures on the recipient side
-        keys: makeCacheableSignalKeyStore(state.keys, silentLogger),
-      },
+      // Use the raw multi-file key store directly. Wrapping it in
+      // makeCacheableSignalKeyStore broke prekey handling → inbound messages
+      // failed to decrypt ("Failed to decrypt message with any known session").
+      auth: state,
       logger: silentLogger,
       markOnlineOnConnect: false, // keep phone notifications working
       browser: ['ClienteLoop', 'Chrome', '1.0.0'],
       syncFullHistory: false,
       // Supplies original content when a recipient requests a message retry
+      // (fixes the outbound "Esperando este mensaje" placeholder)
       getMessage: async (key: any) => {
         if (key?.id && sentMessages.has(key.id)) return sentMessages.get(key.id);
         return undefined;
