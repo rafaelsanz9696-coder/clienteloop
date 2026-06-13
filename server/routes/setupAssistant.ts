@@ -14,7 +14,7 @@ const router = Router();
 
 router.post('/chat', async (req, res) => {
   try {
-    const userId = (req as any).userId;
+    const userId = (req as any).user?.id;
     const { messages } = req.body as {
       messages: Array<{ role: 'user' | 'assistant'; content: string }>;
     };
@@ -73,7 +73,8 @@ Reglas:
       model: 'gemini-3.5-flash',
       systemPrompt,
       messages: messagesForApi,
-      maxTokens: 400,
+      maxTokens: 800,
+      thinkingBudget: 0, // conversational turn — no thinking, avoids truncated replies
     });
 
     const reply = response.text.trim();
@@ -91,7 +92,7 @@ Reglas:
 
 router.post('/finalize', async (req, res) => {
   try {
-    const userId = (req as any).userId;
+    const userId = (req as any).user?.id;
     const { messages } = req.body as {
       messages: Array<{ role: 'user' | 'assistant'; content: string }>;
     };
@@ -123,6 +124,7 @@ router.post('/finalize', async (req, res) => {
       model: 'gemini-3.5-flash',
       temperature: 0,
       maxTokens: 1000,
+      thinkingBudget: 0, // structured JSON extraction — thinking would risk truncating the JSON
       systemPrompt: `Analiza la siguiente entrevista de configuración de negocio y extrae datos estructurados en JSON.
 Devuelve ÚNICAMENTE JSON válido con esta estructura exacta (sin formato markdown ni texto adicional):
 {
@@ -142,6 +144,7 @@ Devuelve ÚNICAMENTE JSON válido con esta estructura exacta (sin formato markdo
       model: 'gemini-3.5-flash',
       temperature: 0,
       maxTokens: 1200,
+      thinkingBudget: 0,
       systemPrompt: `Analiza la siguiente entrevista y genera EXACTAMENTE 5 respuestas rápidas de WhatsApp para el negocio.
 Usa los precios, servicios y tono reales de la entrevista.
 Devuelve ÚNICAMENTE JSON válido (sin formato markdown ni texto adicional):
@@ -159,6 +162,7 @@ Incluye {{nombre}} donde sea natural dirigirse al cliente.`,
       model: 'gemini-3.5-flash',
       temperature: 0,
       maxTokens: 600,
+      thinkingBudget: 0,
       systemPrompt: `Analiza la siguiente entrevista y genera un "Contexto de IA" estructurado para el negocio.
 Este texto será inyectado en el system prompt del asistente de WhatsApp.
 Escríbelo en tercera persona, directo y denso en información útil.

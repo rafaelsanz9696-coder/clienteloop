@@ -127,6 +127,7 @@ export async function geminiRequest(params: {
   tools?: any[];
   temperature?: number;
   maxTokens?: number;
+  thinkingBudget?: number; // 0 disables "thinking" so it never eats the output budget
 }): Promise<{
   text: string;
   toolCalls?: Array<{ name: string; args: any; id: string; thoughtSignature?: string }>;
@@ -141,6 +142,7 @@ export async function geminiRequest(params: {
     generationConfig: {
       temperature: params.temperature ?? 0.5,
       maxOutputTokens: params.maxTokens ?? 1500,
+      ...(params.thinkingBudget != null ? { thinkingConfig: { thinkingBudget: params.thinkingBudget } } : {}),
     },
   };
 

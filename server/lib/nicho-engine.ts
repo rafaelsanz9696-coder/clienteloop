@@ -38,6 +38,7 @@ export async function extractTaskFromConversation(params: {
       ],
       temperature: 0,
       maxTokens: 300,
+      thinkingBudget: 0, // JSON extraction — avoid truncating the JSON
     });
 
     const textContent = response.text;
@@ -129,6 +130,7 @@ REGLA CRÍTICA DE CITAS: Si el cliente pide una cita o pregunta por disponibilid
       ],
       temperature: config.temperature,
       maxTokens: config.maxTokens,
+      thinkingBudget: 0, // WhatsApp replies stay short & fast — thinking would risk truncation
     });
 
     return {
