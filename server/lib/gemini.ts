@@ -18,6 +18,44 @@ function resolveModelName(requestedModel: string): string {
   return 'gemini-3.5-flash';
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * POST to Gemini with automatic retry on transient throttling (429) and
+ * overload (503). The free tier rate-limits aggressively when several calls
+ * fire at once (setup wizard, insights widget, auto-replies), so a short
+ * backoff recovers most of these without bubbling an error to the user.
+ */
+async function fetchGeminiWithRetry(url: string, body: string, maxRetries = 3): Promise<Response> {
+  let lastErrText = '';
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    });
+
+    if (response.ok) return response;
+
+    // Only retry on rate-limit / transient overload
+    if (response.status !== 429 && response.status !== 503) return response;
+
+    lastErrText = await response.text();
+    if (attempt === maxRetries) {
+      return new Response(lastErrText, { status: response.status });
+    }
+
+    // Honor Google's suggested retryDelay if present, else exponential backoff
+    let delayMs = (2 ** attempt) * 1500 + Math.random() * 500;
+    const m = lastErrText.match(/"retryDelay":\s*"(\d+)s"/);
+    if (m) delayMs = Math.max(delayMs, Number(m[1]) * 1000 + 250);
+
+    console.warn(`[Gemini] ${response.status} — retry ${attempt + 1}/${maxRetries} in ${Math.round(delayMs)}ms`);
+    await sleep(delayMs);
+  }
+  return new Response(lastErrText, { status: 429 });
+}
+
 function getApiKey(): string {
   const key = process.env.GEMINI_API_KEY;
   if (!key) {
@@ -158,11 +196,7 @@ export async function geminiRequest(params: {
 
   console.log(`[Gemini Request] Calling ${modelName}...`);
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+  const response = await fetchGeminiWithRetry(url, JSON.stringify(payload));
 
   if (!response.ok) {
     const errText = await response.text();
@@ -237,11 +271,7 @@ export async function geminiStream(params: {
 
   console.log(`[Gemini Stream] Calling ${modelName}...`);
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+  const response = await fetchGeminiWithRetry(url, JSON.stringify(payload));
 
   if (!response.ok) {
     const errText = await response.text();
