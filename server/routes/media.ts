@@ -25,7 +25,7 @@ router.post('/upload', upload.single('file'), async (req: AuthenticatedRequest, 
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
     const file = req.file;
-    const ext = file.originalname.split('.').pop() || 'bin';
+    const ext = (file.originalname.split('.').pop() || 'bin').replace(/[^a-zA-Z0-9]/g, '').slice(0, 10) || 'bin';
     const yearMonth = new Date().toISOString().slice(0, 7);
     const storagePath = `media/${yearMonth}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 

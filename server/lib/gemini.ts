@@ -13,7 +13,7 @@ const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models
 function resolveModelName(requestedModel: string): string {
   const model = (requestedModel || '').toLowerCase();
   if (model.includes('pro')) {
-    return 'gemini-3.1-pro';
+    return 'gemini-3.1-pro-preview';
   }
   return 'gemini-3.5-flash';
 }

@@ -10,6 +10,7 @@ import { io, Socket } from 'socket.io-client';
 import { useBusiness } from './BusinessContext';
 import { useAuth } from './AuthContext';
 import { api } from '../lib/api';
+import { supabase } from '../lib/supabase';
 import { setFaviconBadge } from '../lib/faviconBadge';
 
 interface SocketContextValue {
@@ -75,6 +76,11 @@ export function SocketProvider({ children }: { children: ReactNode }) {
             transports: ['websocket', 'polling'],
             reconnectionAttempts: 3,
             reconnectionDelay: 3000,
+            // Fresh JWT on every (re)connection — server rejects anonymous sockets
+            auth: async (cb) => {
+                const { data: { session } } = await supabase.auth.getSession();
+                cb({ token: session?.access_token });
+            },
         });
 
         newSocket.on('connect', () => {

@@ -18,24 +18,6 @@ interface MediaPayload {
 
 const router = Router();
 
-// ─── Webhook signature verification (Infobip HMAC-SHA256) ───────────────────
-
-function verifyInfobipSignature(req: any): boolean {
-  const secret = process.env.INFOBIP_WEBHOOK_SECRET;
-  if (!secret) return false; // Require secret — fail closed, not open
-
-  const signature = req.headers['x-hub-signature'] || req.headers['x-infobip-signature'];
-  if (!signature) return false;
-
-  const body = JSON.stringify(req.body);
-  const expected = crypto.createHmac('sha256', secret).update(body).digest('hex');
-  try {
-    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
-  } catch {
-    return false;
-  }
-}
-
 // ─── Multi-tenant: resolve business_id from channel number ──────────────────
 
 function verifyMetaSignature(req: any): boolean {
@@ -167,31 +149,6 @@ export async function processIncomingMessage(
 
   AutomationService.handleIncomingMessage(conversationId, text);
 }
-
-// ─── Respond.io / generic webhook (legacy) ───────────────────────────────────
-
-router.post('/respondio', async (req, res) => {
-  try {
-    const payload = req.body;
-    res.status(200).send('OK');
-
-    const phone = payload.contact?.phone || payload.from || null;
-    const text = payload.message?.text || payload.text || null;
-    const businessId = Number(payload.business_id) || 1;
-
-    if (!phone || !text) {
-      console.warn('[Webhook/respondio] Missing phone or text — ignoring.');
-      return;
-    }
-
-    const name = payload.contact?.name || phone;
-    const channel = payload.channel || 'whatsapp';
-
-    await processIncomingMessage(businessId, phone, null, name, text, channel);
-  } catch (err) {
-    console.error('[Webhook/respondio Error]', err);
-  }
-});
 
 // ─── Meta WhatsApp Cloud API — Webhook Verification ────────────────────────────
 

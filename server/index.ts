@@ -119,7 +119,7 @@ app.get('/api/health', (_req, res) => {
 
 // Public routes (no JWT required)
 app.use('/api/webhooks', webhookLimiter, webhooksRouter);
-app.use('/api/public/book', publicBookRouter);
+app.use('/api/public/book', webhookLimiter, publicBookRouter);
 
 // Protected API Routes
 app.use('/api/business', requireAuth, businessRouter);
