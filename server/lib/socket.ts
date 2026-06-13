@@ -25,6 +25,7 @@ export const initSocket = (httpServer: HTTPServer) => {
             origin: allowedOrigin,
             methods: ['GET', 'POST'],
         },
+        maxHttpBufferSize: 1e6, // 1 MB — cap binary attachments (GHSA-677m-j7p3-52f9)
     });
 
     // Require a valid Supabase JWT on every connection — rooms carry real
