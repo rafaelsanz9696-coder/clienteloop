@@ -95,6 +95,7 @@ Genera insights útiles basados en estos datos.`;
         const response = await geminiRequest({
             model: 'gemini-3.5-flash',
             maxTokens: 800,
+            thinkingBudget: 0, // structured JSON output — thinking would truncate it
             messages: [{ role: 'user', content: userMessage }],
             systemPrompt: systemPrompt,
             temperature: 0.2

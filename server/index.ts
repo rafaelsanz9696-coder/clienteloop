@@ -48,6 +48,20 @@ import { processRetryQueue } from './lib/wa-retry.js';
 
 initDb().catch(console.error);
 
+// ─── Crash guards ────────────────────────────────────────────────────────────
+// Baileys (unofficial WhatsApp) can emit unhandled async errors during protocol
+// decryption/reconnection. Without these, one such error kills the whole Node
+// process and Railway emails "Deployment crashed". Log to Sentry and keep the
+// server (and the CRM/WhatsApp session) alive instead of dying.
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason);
+  Sentry.captureException(reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
+  Sentry.captureException(err);
+});
+
 // ─── Appointment reminder scheduler (every 5 minutes) ────────────────────────
 const REMINDER_INTERVAL_MS = 5 * 60 * 1000;
 console.log('[Scheduler] Started, checking every 5 min');
