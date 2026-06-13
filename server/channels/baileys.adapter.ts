@@ -25,7 +25,7 @@ import { processIncomingMessage } from '../routes/webhooks.js';
 // Interop-safe resolution of makeWASocket (package ships CJS with default export)
 const makeWASocket: any =
   (baileys as any).makeWASocket ?? (baileys as any).default?.makeWASocket ?? (baileys as any).default;
-const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = baileys as any;
+const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } = baileys as any;
 
 const AUTH_ROOT = process.env.BAILEYS_AUTH_DIR || path.resolve('baileys_auth');
 
@@ -37,6 +37,7 @@ interface BaileysSession {
   qr: string | null;        // data URL for the frontend <img>
   phone: string | null;     // own number once connected
   recentlySent: Set<string>; // message ids we sent — to ignore their fromMe echo
+  sentMessages: Map<string, any>; // id -> message content, for getMessage retries
 }
 
 const sessions = new Map<number, BaileysSession>();
@@ -182,13 +183,29 @@ export const BaileysAdapter = {
       console.warn('[Baileys] Could not fetch latest WA Web version — using library default');
     }
 
+    const silentLogger = pino({ level: 'silent' }) as any;
+
+    // Cache of messages we sent, so getMessage can re-encrypt on retry receipts.
+    // Without this, recipients see "Esperando este mensaje" when decryption fails.
+    const sentMessages = new Map<string, any>();
+
     const sock = makeWASocket({
       version,
-      auth: state,
-      logger: pino({ level: 'silent' }) as any,
+      auth: {
+        creds: state.creds,
+        // Cacheable key store keeps Signal sessions consistent → fixes
+        // "Waiting for this message" decryption failures on the recipient side
+        keys: makeCacheableSignalKeyStore(state.keys, silentLogger),
+      },
+      logger: silentLogger,
       markOnlineOnConnect: false, // keep phone notifications working
       browser: ['ClienteLoop', 'Chrome', '1.0.0'],
       syncFullHistory: false,
+      // Supplies original content when a recipient requests a message retry
+      getMessage: async (key: any) => {
+        if (key?.id && sentMessages.has(key.id)) return sentMessages.get(key.id);
+        return undefined;
+      },
     });
 
     const session: BaileysSession = {
@@ -197,6 +214,7 @@ export const BaileysAdapter = {
       qr: null,
       phone: null,
       recentlySent: new Set(),
+      sentMessages,
     };
     sessions.set(businessId, session);
 
@@ -355,6 +373,14 @@ export const BaileysAdapter = {
       const result = await session.sock.sendMessage(jid, content);
       if (result?.key?.id) {
         session.recentlySent.add(result.key.id);
+        // Cache the sent message so getMessage can re-send it on a retry receipt
+        if (result.message) {
+          session.sentMessages.set(result.key.id, result.message);
+          if (session.sentMessages.size > 200) {
+            const firstKey = session.sentMessages.keys().next().value as string;
+            session.sentMessages.delete(firstKey);
+          }
+        }
         if (session.recentlySent.size > 300) {
           // trim oldest entries to bound memory
           const it = session.recentlySent.values();
