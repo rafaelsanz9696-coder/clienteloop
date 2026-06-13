@@ -4,7 +4,7 @@
 
 import { Router } from 'express';
 import db from '../db/database.js';
-import { storeMemory } from '../lib/agent-memory.js';
+import { storeMemory, type MemoryType } from '../lib/agent-memory.js';
 import { geminiRequest, geminiStream } from '../lib/gemini.js';
 
 const router = Router();
@@ -180,6 +180,50 @@ const COPILOT_TOOLS = [
         content: { type: 'string', description: 'Contenido claro y específico a recordar' },
       },
       required: ['type', 'content'],
+    },
+  },
+  {
+    name: 'setup_business_knowledge',
+    description: 'Configura el conocimiento del negocio EN BLOQUE a partir de información que el dueño pega en el chat (prompt de negocio, lista de precios, servicios, políticas, horarios). Guarda múltiples memorias, actualiza el contexto de la IA y crea respuestas rápidas en UNA sola operación. Úsala SIEMPRE que el dueño pegue un texto largo con información de su negocio — NO uses add_memory repetidamente para eso.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        memories: {
+          type: 'array',
+          description: 'Datos atómicos a memorizar. Un dato por memoria: cada precio, cada servicio, cada política, cada horario por separado.',
+          items: {
+            type: 'object',
+            properties: {
+              type:    { type: 'string', enum: ['faq', 'style', 'pattern', 'client_insight'], description: 'faq: hecho concreto (precios, servicios, políticas) | style: tono/estilo | pattern: pregunta frecuente | client_insight: insight de clientes' },
+              content: { type: 'string', description: 'Dato claro y autocontenido, ej: "Envío a Cuba 1-10 lb: $8/lb"' },
+            },
+            required: ['type', 'content'],
+          },
+        },
+        ai_context: {
+          type: 'string',
+          description: 'Resumen completo y bien redactado del negocio para el cerebro de la IA: qué hace, servicios, precios clave, políticas, tono. Escríbelo como instrucciones para un asistente.',
+        },
+        ai_context_mode: {
+          type: 'string',
+          enum: ['append', 'replace'],
+          description: 'replace si el dueño está configurando desde cero o pegó su prompt completo; append si solo agrega info nueva',
+        },
+        quick_replies: {
+          type: 'array',
+          description: 'Respuestas rápidas de WhatsApp útiles derivadas de la info (opcional, máx 6)',
+          items: {
+            type: 'object',
+            properties: {
+              title:    { type: 'string', description: 'Título corto (máx 40 chars)' },
+              content:  { type: 'string', description: 'Mensaje listo para enviar, puede incluir {{nombre}}' },
+              category: { type: 'string', description: 'saludo, precios, horarios, politicas, promocion, seguimiento, general' },
+            },
+            required: ['title', 'content'],
+          },
+        },
+      },
+      required: ['memories'],
     },
   },
   {
@@ -400,6 +444,58 @@ async function executeTool(
       return { result: { status: 'saved', type: toolInput.type, content: toolInput.content } };
     }
 
+    case 'setup_business_knowledge': {
+      const memories: Array<{ type: string; content: string }> = Array.isArray(toolInput.memories)
+        ? toolInput.memories
+        : [];
+      const validTypes: MemoryType[] = ['faq', 'style', 'pattern', 'client_insight'];
+
+      let savedMemories = 0;
+      for (const m of memories) {
+        if (!m?.content) continue;
+        const type: MemoryType = validTypes.includes(m.type as MemoryType) ? (m.type as MemoryType) : 'faq';
+        await storeMemory(businessId, type, m.content, 'manual', 9);
+        savedMemories++;
+      }
+
+      let contextUpdated = false;
+      if (toolInput.ai_context) {
+        if (toolInput.ai_context_mode === 'append') {
+          const { rows } = await db.query('SELECT ai_context FROM businesses WHERE id=$1', [businessId]);
+          const current = rows[0]?.ai_context || '';
+          await db.query('UPDATE businesses SET ai_context=$1 WHERE id=$2', [
+            current ? current + '\n\n' + toolInput.ai_context : toolInput.ai_context,
+            businessId,
+          ]);
+        } else {
+          await db.query('UPDATE businesses SET ai_context=$1 WHERE id=$2', [toolInput.ai_context, businessId]);
+        }
+        contextUpdated = true;
+      }
+
+      let createdReplies = 0;
+      const quickReplies: Array<{ title: string; content: string; category?: string }> = Array.isArray(toolInput.quick_replies)
+        ? toolInput.quick_replies.slice(0, 6)
+        : [];
+      for (const qr of quickReplies) {
+        if (!qr?.title || !qr?.content) continue;
+        await db.query(
+          'INSERT INTO quick_replies (business_id, title, content, category) VALUES ($1, $2, $3, $4)',
+          [businessId, qr.title.slice(0, 40), qr.content, qr.category || 'general'],
+        );
+        createdReplies++;
+      }
+
+      return {
+        result: {
+          status: 'configured',
+          memories_saved: savedMemories,
+          ai_context_updated: contextUpdated,
+          quick_replies_created: createdReplies,
+        },
+      };
+    }
+
     case 'create_contact': {
       const { name, phone, channel } = toolInput;
       return {
@@ -505,6 +601,14 @@ DATOS Y HERRAMIENTAS:
 - Para compose_followup: busca al contacto, genera el mensaje y preséntalo para que el dueño lo apruebe antes de enviar.
 - Para acciones con consecuencias (enviar mensajes, modificar contexto IA, agregar contactos): siempre pide confirmación.
 
+CONFIGURACIÓN DEL NEGOCIO POR CHAT (muy importante):
+- Si el dueño pega un texto largo con información de su negocio (un prompt que tenía guardado, lista de precios, servicios, políticas, horarios), usa setup_business_knowledge para configurarlo TODO en una sola operación.
+- Extrae cada dato como una memoria atómica y separada: cada precio es una memoria, cada servicio es una memoria, cada política es una memoria. Sé exhaustivo — no resumas ni omitas precios.
+- Redacta también el ai_context: un resumen completo del negocio escrito como instrucciones para el asistente que responde a los clientes (usa mode=replace si es la configuración inicial o el dueño pegó su prompt completo).
+- Genera 3-6 respuestas rápidas útiles a partir de la info (saludo, precios, horarios...).
+- Al terminar, muestra un resumen claro de lo que aprendiste: cuántas memorias, qué contexto quedó, qué respuestas rápidas creaste. Pregunta si falta algo.
+- Este flujo NO requiere confirmación previa: la información viene del dueño textualmente.
+
 LO QUE PUEDES HACER:
 - Consultar stats, leads, pipeline, conversaciones y tareas pendientes
 - Mover leads entre etapas del pipeline
@@ -512,6 +616,7 @@ LO QUE PUEDES HACER:
 - Crear respuestas rápidas de WhatsApp listas para usar
 - Actualizar o ampliar el contexto de tu IA (lo que el asistente sabe del negocio)
 - Guardar memorias importantes (precios, políticas, insights de clientes)
+- Configurar el negocio completo desde un texto pegado (prompt, precios, servicios) con setup_business_knowledge
 - Agregar nuevos contactos al CRM
 - Redactar y proponer mensajes de seguimiento personalizados
 
