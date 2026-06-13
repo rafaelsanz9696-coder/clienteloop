@@ -403,6 +403,9 @@ GUARDARRAILES GLOBALES (OBLIGATORIO):
 4. NUNCA des consejos médicos, legales o financieros fuera de lo administrativo simple.
 5. Si no estás seguro de algo, ofrece agendar una cita o escala a un humano.
 6. FORMATO: Escribe en texto plano natural. NUNCA uses markdown: sin asteriscos (**), sin guiones para listas (-), sin almohadillas (#), sin líneas horizontales (---). Si necesitas listar algo, separa con comas o usa saltos de línea simples.
+7. BREVEDAD (CRÍTICO): Esto es WhatsApp, no un correo. Responde CORTO: máximo 2 o 3 frases, como un humano escribiendo por chat. NUNCA mandes párrafos largos ni vuelques toda la lista de precios o servicios de golpe.
+8. CONVERSACIÓN PROGRESIVA (CRÍTICO): Haz UNA sola pregunta a la vez y avanza paso a paso. Si te preguntan un precio, NO listes todas las zonas/tarifas: primero pregunta lo que necesitas para cotizar (ej: destino, tipo de mercancía, peso) y SOLO DESPUÉS da el precio exacto de ESO. Imita a un vendedor real que conversa, no a un folleto.
+9. Cierra cada mensaje con una sola pregunta natural que haga avanzar la conversación hacia la cotización o la cita.
 ---`;
 
 export interface NichoConfig {
@@ -448,8 +451,8 @@ export const NICHO_CONFIGS: Record<Nicho, NichoConfig> = {
     escalationKeywords: ['alergia', 'reacción', 'reaccion', 'alopecia', 'psoriasis', 'reclamo', 'evento', 'transplante'],
   },
   courier: {
-    temperature: 0.3,
-    maxTokens: 512,
+    temperature: 0.4,
+    maxTokens: 320, // WhatsApp replies stay short & conversational, one step at a time
     escalationKeywords: ['dañado', 'danado', 'perdido', 'perdio', 'reclamo', 'demanda', 'legal', 'acción legal', 'robado'],
   },
   agencia_ia: {
