@@ -131,11 +131,19 @@ async function recordPhoneReply(businessId: number, phone: string, text: string)
 
 async function handleUpsert(businessId: number, session: BaileysSession, msg: any): Promise<void> {
   const jid: string = msg.key?.remoteJid ?? '';
-  if (!jid.endsWith('@s.whatsapp.net')) return; // skip groups, status, newsletters
+  console.log(`[Baileys] upsert jid=${jid} fromMe=${msg.key?.fromMe} hasMsg=${!!msg.message}`);
+
+  if (!jid.endsWith('@s.whatsapp.net')) {
+    console.log(`[Baileys] skipped: non-individual jid (${jid})`);
+    return; // skip groups, status, newsletters
+  }
   if (!msg.message) return;
 
   const text = extractText(msg.message);
-  if (!text) return;
+  if (!text) {
+    console.log(`[Baileys] skipped: no extractable text — keys: ${Object.keys(msg.message).join(',')}`);
+    return;
+  }
 
   const phone = jid.split('@')[0].replace(/\D/g, '');
 
@@ -151,6 +159,7 @@ async function handleUpsert(businessId: number, session: BaileysSession, msg: an
   }
 
   const name = msg.pushName || phone;
+  console.log(`[Baileys] ⬇️ incoming from +${phone} (${name}): "${text.slice(0, 40)}" — routing to business ${businessId}`);
   await processIncomingMessage(businessId, phone, null, name, text, 'whatsapp');
 }
 
@@ -236,7 +245,10 @@ export const BaileysAdapter = {
     });
 
     sock.ev.on('messages.upsert', async ({ messages, type }: any) => {
-      if (type !== 'notify') return;
+      console.log(`[Baileys] messages.upsert type=${type} count=${messages?.length ?? 0}`);
+      // 'notify' = live message; 'append' can also carry fresh messages right
+      // after connecting. Only 'set' (bulk history sync) is safe to ignore.
+      if (type === 'set') return;
       for (const msg of messages) {
         try {
           await handleUpsert(businessId, session, msg);
