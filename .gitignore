@@ -11,3 +11,13 @@ coverage/
 *.db-wal
 playwright-report/
 test-results/
+
+# Local scratch / one-off scripts (not part of the app)
+/build_out.txt
+/sdd_actualidad.md
+/check-*.ts
+/scan_*.ts
+/test-*.ts
+/fix_*.ts
+/migrate_*.ts
+/simulate-*.ts
