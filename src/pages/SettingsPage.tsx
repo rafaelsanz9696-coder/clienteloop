@@ -16,7 +16,6 @@ import { parseWhatsAppChat, formatChatForAnalysis, getChatStats } from '../lib/c
 import QuickRepliesTab from '../components/settings/QuickRepliesTab';
 import MemoriesTab from '../components/settings/MemoriesTab';
 import AISetupAssistant from '../components/AISetupAssistant';
-import BaileysConnect from '../components/settings/BaileysConnect';
 import type { TeamMember, TeamInvitation } from '../types/index';
 
 const NICHOS = [
@@ -419,9 +418,6 @@ function ChannelsTab() {
           </>
         )}
       </div>
-
-      {/* ── WhatsApp QR (Baileys coexistence — no Meta approval needed) ── */}
-      <BaileysConnect />
 
       {/* ── Other channels (SMS, Email) ── */}
       <div className="space-y-3">

@@ -37,8 +37,6 @@ import broadcastsRouter from './routes/broadcasts.js';
 import teamRouter from './routes/team.js';
 import billingRouter from './routes/billing.js';
 import mediaRouter from './routes/media.js';
-import baileysRouter from './routes/baileys.js';
-import { BaileysAdapter } from './channels/baileys.adapter.js';
 import { errorLogger } from './middleware/errorLogger.js';
 import { requireAuth } from './middleware/auth.js';
 import { initSocket } from './lib/socket.js';
@@ -49,10 +47,8 @@ import { processRetryQueue } from './lib/wa-retry.js';
 initDb().catch(console.error);
 
 // ─── Crash guards ────────────────────────────────────────────────────────────
-// Baileys (unofficial WhatsApp) can emit unhandled async errors during protocol
-// decryption/reconnection. Without these, one such error kills the whole Node
-// process and Railway emails "Deployment crashed". Log to Sentry and keep the
-// server (and the CRM/WhatsApp session) alive instead of dying.
+// An unhandled async error anywhere shouldn't take down the whole API process.
+// Log to Sentry and keep the server alive instead of dying.
 process.on('unhandledRejection', (reason) => {
   console.error('[unhandledRejection]', reason);
   Sentry.captureException(reason);
@@ -159,7 +155,6 @@ app.use('/api/broadcasts', requireAuth, broadcastsRouter);
 app.use('/api/team', requireAuth, teamRouter);
 app.use('/api/billing', billingRouter);
 app.use('/api/media', requireAuth, mediaRouter);
-app.use('/api/channels/baileys', requireAuth, baileysRouter);
 
 // Global error handler
 Sentry.setupExpressErrorHandler(app);
@@ -173,9 +168,4 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 httpServer.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`API Server running on port ${PORT}`);
   console.log(`   Health: http://localhost:${PORT}/api/health`);
-
-  // Re-link WhatsApp QR (Baileys) sessions persisted on disk
-  BaileysAdapter.restoreSessions().catch((err) =>
-    console.error('[Baileys] Session restore failed:', err),
-  );
 });

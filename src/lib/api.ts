@@ -260,19 +260,6 @@ export const api = {
     ),
   deleteChannelNumber: (id: number) =>
     request<{ success: boolean }>(`/business/channels/${id}`, { method: 'DELETE' }),
-
-  // WhatsApp QR / coexistence (Baileys)
-  getBaileysStatus: () =>
-    request<{ status: 'disconnected' | 'connecting' | 'qr' | 'connected'; qr: string | null; phone: string | null }>(
-      '/channels/baileys/status'
-    ),
-  connectBaileys: () =>
-    request<{ status: string; qr: string | null; phone: string | null }>(
-      '/channels/baileys/connect',
-      { method: 'POST' }
-    ),
-  disconnectBaileys: () =>
-    request<{ success: boolean }>('/channels/baileys/disconnect', { method: 'POST' }),
   connectWhatsApp: (code: string, wabaId: string, phoneNumberId?: string) =>
     request<{ success: boolean; phone_number_id: string; display_phone_number: string; label: string }>(
       '/business/channels/whatsapp/connect',
