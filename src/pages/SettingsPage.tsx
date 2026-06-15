@@ -52,7 +52,9 @@ function parseEmbeddedSignupMessage(event: MessageEvent): EmbeddedSignupData | n
 
   const payload = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
   if (payload?.type !== 'WA_EMBEDDED_SIGNUP') return null;
-  if (!['FINISH', 'FINISH_ONLY_WABA'].includes(payload.event)) return null;
+  // Accept every success event: FINISH, FINISH_ONLY_WABA, and the coexistence
+  // completion event (FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING).
+  if (typeof payload.event !== 'string' || !payload.event.startsWith('FINISH')) return null;
 
   return payload.data ?? null;
 }
@@ -221,8 +223,10 @@ function ChannelsTab() {
             response_type: 'code',
             override_default_response_type: true,
             extras: {
-              feature: 'whatsapp_embedded_signup',
-              sessionInfoVersion: 2,
+              // Coexistence flow: connects an existing WhatsApp Business App number
+              // via QR scan (keeps the number on the phone) instead of SMS migration.
+              featureType: 'whatsapp_business_app_onboard',
+              sessionInfoVersion: 3,
             },
           }
         );
