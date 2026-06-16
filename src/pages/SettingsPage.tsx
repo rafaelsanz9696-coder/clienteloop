@@ -225,7 +225,7 @@ function ChannelsTab() {
             extras: {
               // Coexistence flow: connects an existing WhatsApp Business App number
               // via QR scan (keeps the number on the phone) instead of SMS migration.
-              featureType: 'whatsapp_business_app_onboard',
+              featureType: 'whatsapp_business_app_onboarding',
               sessionInfoVersion: 3,
             },
           }
