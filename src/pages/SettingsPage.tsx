@@ -359,67 +359,241 @@ function ChannelsTab() {
             </button>
           </>
         ) : (
-          /* Not connected */
-          <>
-            <p className="text-xs text-slate-500">
-              Conecta tu número de WhatsApp Business en segundos. Tu número sigue activo en la app del teléfono (Coexistence) y el CRM recibe y envía mensajes con IA en paralelo.
-            </p>
-            <button
-              onClick={handleEmbeddedSignupV2}
-              disabled={connecting}
-              className="flex items-center gap-2 px-4 py-2.5 bg-[#1877F2] text-white text-sm font-semibold rounded-lg hover:bg-[#166ee1] disabled:opacity-60 transition-colors shadow-sm"
-            >
-              {connecting
-                ? <><Loader2 className="w-4 h-4 animate-spin" /> Conectando...</>
-                : <><MessageSquare className="w-4 h-4" /> Conectar con Facebook</>}
-            </button>
-            <p className="text-[11px] text-slate-400">
-              🔒 Tu número permanece activo en WhatsApp Business App. No necesitas migrar nada.
-            </p>
-
-            {/* Manual fallback */}
-            {!addingWaManual ? (
-              <button
-                onClick={() => setAddingWaManual(true)}
-                className="text-xs text-slate-400 hover:text-slate-600 underline transition-colors"
-              >
-                ¿Prefieres configurar con Phone Number ID manualmente?
-              </button>
-            ) : (
-              <div className="border border-slate-200 rounded-lg p-3 space-y-2 bg-slate-50">
-                <p className="text-xs font-medium text-slate-700">Configuración manual</p>
-                <p className="text-[11px] text-slate-400">
-                  Obtén el <strong>Phone Number ID</strong> en Meta Developer Dashboard → WhatsApp → API Setup
-                </p>
-                <input
-                  type="text"
-                  value={waPhoneId}
-                  onChange={(e) => setWaPhoneId(e.target.value)}
-                  placeholder="Phone Number ID (ej: 1234567890123456)"
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <input
-                  type="text"
-                  value={waLabel}
-                  onChange={(e) => setWaLabel(e.target.value)}
-                  placeholder="Etiqueta (ej: Mundo en tus manos)"
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <div className="flex gap-2 justify-end">
-                  <button onClick={() => setAddingWaManual(false)} className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700">
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={handleAddWaManual}
-                    disabled={savingWa || !waPhoneId.trim()}
-                    className="px-4 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
-                  >
-                    {savingWa ? 'Guardando...' : 'Guardar'}
-                  </button>
+          /* Not connected — Rediseño estilo WhatsApp Web */
+          <div className="bg-[#eae6df] p-6 rounded-2xl border border-slate-200 flex flex-col gap-4 font-sans w-full mt-2">
+            {/* Top Banner (mocking the Download App banner) */}
+            <div className="bg-white rounded-2xl border border-[#e9edef] p-4 flex items-center justify-between shadow-sm">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600 shrink-0">
+                  <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current">
+                    <path d="M4 6h16v10H4zm16 12H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2h16c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2zm2 2H2v-1h20v1z"/>
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-[#111b21] leading-tight">Configuración de Coexistencia de WhatsApp</h4>
+                  <p className="text-xs text-[#667781] mt-0.5">Mantén tu número activo en tu celular y usa la IA en ClienteLoop en paralelo.</p>
                 </div>
               </div>
-            )}
-          </>
+              <span className="bg-[#00a884] text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-sm shrink-0">
+                Canal Oficial
+              </span>
+            </div>
+
+            {/* Main Connection Card */}
+            <div className="bg-white rounded-2xl border border-[#e9edef] p-6 sm:p-8 shadow-sm flex flex-col md:flex-row gap-8 items-stretch">
+              
+              {/* Left Column (Instructions or Manual Form) */}
+              <div className="flex-1 flex flex-col justify-between space-y-6">
+                {!addingWaManual ? (
+                  /* Standard Instructions */
+                  <div className="space-y-4">
+                    <h3 className="text-2xl font-light text-[#111b21]">Vincular WhatsApp Business</h3>
+                    
+                    <ol className="space-y-4 text-[14px] text-[#3b4a54] leading-relaxed">
+                      <li className="flex gap-4 items-start">
+                        <span className="w-7 h-7 rounded-full border border-[#8696a0] flex items-center justify-center font-normal text-[#111b21] shrink-0 text-sm">1</span>
+                        <div>
+                          Haz clic en el código QR o en el botón de la derecha para abrir el portal seguro de <strong className="text-[#1877f2]">Meta</strong>.
+                        </div>
+                      </li>
+                      <li className="flex gap-4 items-start">
+                        <span className="w-7 h-7 rounded-full border border-[#8696a0] flex items-center justify-center font-normal text-[#111b21] shrink-0 text-sm">2</span>
+                        <div>
+                          Inicia sesión en tu cuenta de Facebook y selecciona el negocio al que deseas vincular.
+                        </div>
+                      </li>
+                      <li className="flex gap-4 items-start">
+                        <span className="w-7 h-7 rounded-full border border-[#8696a0] flex items-center justify-center font-normal text-[#111b21] shrink-0 text-sm">3</span>
+                        <div>
+                          Escanea el código QR que se mostrará en la ventana emergente de Meta con tu teléfono para completar la vinculación.
+                        </div>
+                      </li>
+                    </ol>
+                  </div>
+                ) : (
+                  /* Manual configuration form */
+                  <div className="space-y-4">
+                    <h3 className="text-2xl font-light text-[#111b21]">Configuración manual</h3>
+                    <p className="text-xs text-[#667781]">
+                      Obtén tu <strong>Phone Number ID</strong> en Meta Developer Dashboard → WhatsApp → API Setup
+                    </p>
+                    
+                    <div className="space-y-3 pt-2 max-w-md">
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Phone Number ID</label>
+                        <input
+                          type="text"
+                          value={waPhoneId}
+                          onChange={(e) => setWaPhoneId(e.target.value)}
+                          placeholder="Phone Number ID (ej: 1234567890123456)"
+                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Etiqueta del canal</label>
+                        <input
+                          type="text"
+                          value={waLabel}
+                          onChange={(e) => setWaLabel(e.target.value)}
+                          placeholder="Etiqueta (ej: Mundo en tus manos)"
+                          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="flex gap-2 justify-end pt-2">
+                        <button 
+                          onClick={() => setAddingWaManual(false)} 
+                          className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={handleAddWaManual}
+                          disabled={savingWa || !waPhoneId.trim()}
+                          className="px-5 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors shadow-sm"
+                        >
+                          {savingWa ? 'Guardando...' : 'Guardar'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-4 pt-4 border-t border-[#f0f2f5]">
+                  <a 
+                    href="https://developers.facebook.com/docs/whatsapp/cloud-api" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="text-sm font-semibold text-[#00a884] hover:underline flex items-center gap-1"
+                  >
+                    ¿Necesitas ayuda con el proceso? ↗
+                  </a>
+                  
+                  <label className="flex items-center gap-3 cursor-pointer select-none text-sm text-[#3b4a54]">
+                    <input 
+                      type="checkbox" 
+                      defaultChecked 
+                      className="rounded border-[#8696a0] text-[#00a884] focus:ring-[#00a884] w-4 h-4 accent-[#00a884]" 
+                    />
+                    <span>Mantener la IA respondiendo activamente</span>
+                  </label>
+                  
+                  {!addingWaManual && (
+                    <button 
+                      onClick={() => setAddingWaManual(true)} 
+                      className="text-sm font-semibold text-[#00a884] hover:underline flex items-center gap-1 text-left"
+                    >
+                      Iniciar sesión con número de teléfono (Manual) &gt;
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column (QR Code Container or manual help) */}
+              <div className="flex flex-col items-center justify-center shrink-0 w-full md:w-[280px] border-t md:border-t-0 md:border-l border-[#f0f2f5] pt-6 md:pt-0 md:pl-8">
+                <div 
+                  onClick={handleEmbeddedSignupV2}
+                  className="relative group cursor-pointer bg-white p-4 border border-[#e9edef] rounded-xl hover:shadow-md transition-all duration-300 flex items-center justify-center w-[220px] h-[220px]"
+                >
+                  {/* QR Code Placeholder vector graphics */}
+                  <div className="w-full h-full relative opacity-85 group-hover:opacity-100 transition-opacity">
+                    <svg viewBox="0 0 100 100" className="w-full h-full fill-slate-800">
+                      {/* Anchor square Top Left */}
+                      <rect x="5" y="5" width="25" height="25" rx="2" />
+                      <rect x="10" y="10" width="15" height="15" rx="1" fill="white" />
+                      <rect x="13" y="13" width="9" height="9" rx="0.5" />
+
+                      {/* Anchor square Top Right */}
+                      <rect x="70" y="5" width="25" height="25" rx="2" />
+                      <rect x="75" y="10" width="15" height="15" rx="1" fill="white" />
+                      <rect x="78" y="13" width="9" height="9" rx="0.5" />
+
+                      {/* Anchor square Bottom Left */}
+                      <rect x="5" y="70" width="25" height="25" rx="2" />
+                      <rect x="10" y="75" width="15" height="15" rx="1" fill="white" />
+                      <rect x="13" y="78" width="9" height="9" rx="0.5" />
+
+                      {/* Stylized QR Pixels */}
+                      <rect x="35" y="5" width="5" height="5" />
+                      <rect x="45" y="5" width="10" height="5" />
+                      <rect x="60" y="5" width="5" height="10" />
+                      <rect x="35" y="15" width="15" height="5" />
+                      <rect x="55" y="15" width="5" height="5" />
+                      <rect x="35" y="25" width="5" height="10" />
+                      <rect x="45" y="25" width="10" height="5" />
+                      <rect x="60" y="25" width="5" height="5" />
+                      <rect x="5" y="35" width="5" height="15" />
+                      <rect x="15" y="35" width="5" height="5" />
+                      <rect x="25" y="35" width="10" height="5" />
+                      <rect x="40" y="35" width="5" height="10" />
+                      <rect x="50" y="35" width="15" height="5" />
+                      <rect x="70" y="35" width="10" height="5" />
+                      <rect x="85" y="35" width="5" height="15" />
+                      <rect x="5" y="55" width="10" height="5" />
+                      <rect x="20" y="55" width="5" height="10" />
+                      <rect x="30" y="55" width="5" height="5" />
+                      <rect x="40" y="55" width="15" height="5" />
+                      <rect x="60" y="55" width="10" height="10" />
+                      <rect x="75" y="55" width="5" height="5" />
+                      <rect x="85" y="55" width="10" height="5" />
+                      <rect x="35" y="70" width="5" height="15" />
+                      <rect x="45" y="70" width="10" height="5" />
+                      <rect x="60" y="70" width="5" height="5" />
+                      <rect x="70" y="70" width="15" height="5" />
+                      <rect x="35" y="85" width="10" height="5" />
+                      <rect x="50" y="85" width="5" height="10" />
+                      <rect x="60" y="85" width="15" height="5" />
+                      <rect x="80" y="85" width="15" height="5" />
+                      <rect x="70" y="90" width="5" height="5" />
+                    </svg>
+
+                    {/* WhatsApp Icon in Center */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="bg-white p-2 rounded-full shadow-md border border-[#e9edef]">
+                        <svg viewBox="0 0 24 24" className="w-8 h-8 text-[#00a884] fill-current">
+                          <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.731-1.456L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.625 1.45 5.489 0 9.953-4.43 9.956-9.879.002-2.64-1.019-5.123-2.877-6.986-1.857-1.863-4.339-2.89-6.98-2.893-5.49 0-9.954 4.43-9.958 9.88-.001 2.025.524 4.004 1.523 5.74L1.7 21.82l5.09-1.332zm12.355-6.732c-.104-.176-.388-.282-.814-.495-.426-.213-2.518-1.242-2.906-1.383-.388-.141-.67-.213-.953.213-.283.426-1.096 1.383-1.343 1.666-.247.283-.495.318-.92.106-.426-.213-1.8-.663-3.427-2.114-1.267-1.13-2.122-2.525-2.37-2.95-.248-.426-.027-.656.185-.868.191-.19.426-.496.638-.744.213-.248.283-.425.426-.709.141-.282.07-.53-.035-.743-.106-.213-.953-2.298-1.306-3.148-.344-.829-.693-.717-.953-.73l-.814-.012c-.283 0-.743.106-1.13.531-.388.426-1.484 1.452-1.484 3.541s1.52 4.107 1.732 4.39c.213.283 2.993 4.57 7.252 6.406 1.013.437 1.803.698 2.417.893 1.017.323 1.942.277 2.673.168.814-.122 2.518-.1 2.827-1.014.309-.913.309-1.699.217-1.863-.092-.164-.376-.26-.803-.473z"/>
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Overlay when hovering */}
+                  <div className="absolute inset-0 bg-[#f9f9f9]/95 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-xl p-4 text-center">
+                    <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center text-[#1877F2] mb-2 animate-bounce">
+                      <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current">
+                        <path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/>
+                      </svg>
+                    </div>
+                    <span className="text-xs font-bold text-slate-800">Conectar con Facebook</span>
+                    <span className="text-[10px] text-slate-400 mt-1">Haga clic para iniciar el popup seguro</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleEmbeddedSignupV2}
+                  disabled={connecting}
+                  className="mt-4 flex items-center justify-center gap-2 px-5 py-2.5 bg-[#1877F2] text-white text-sm font-semibold rounded-lg hover:bg-[#166ee1] disabled:opacity-60 transition-colors shadow-sm w-[220px]"
+                >
+                  {connecting ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Conectando...</>
+                  ) : (
+                    <><MessageSquare className="w-4 h-4" /> Abrir Meta Popup</>
+                  )}
+                </button>
+              </div>
+
+            </div>
+
+            {/* Footer */}
+            <div className="flex flex-col sm:flex-row items-center justify-between text-xs text-[#667781] px-2 gap-2">
+              <span>¿No tienes una cuenta de WhatsApp? <a href="https://developers.facebook.com/docs/whatsapp/cloud-api" target="_blank" rel="noopener noreferrer" className="text-[#00a884] hover:underline font-semibold">Primeros pasos ↗</a></span>
+              <span className="flex items-center gap-1 mt-1 sm:mt-0">
+                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current text-[#8696a0]">
+                  <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+                </svg>
+                Tus mensajes personales están cifrados de extremo a extremo.
+              </span>
+            </div>
+          </div>
         )}
       </div>
 
